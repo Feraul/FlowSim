@@ -1,0 +1,282 @@
+
+%--------------------------------------------------------------------------
+%Subject: numerical routine to solve flux flow in porous media
+%Type of file: FUNCTION
+%Programer: Fernando Contreras, 2021
+%--------------------------------------------------------------------------
+%Goals:
+
+%--------------------------------------------------------------------------
+%This FUNCTION calculate the
+
+%--------------------------------------------------------------------------
+
+function [env,preTPFA,preMPFAD,preMPFAQL,preNLTPFA, preMPFAH, preconcentraMPFAD,...
+    preconcentraNLTPFA, preGravity,parmRichardEq] = preMPFA(env,parmgroundwater,...
+    parmRichardEq)
+
+%Obtain the coordinate of both CENTER and AUXILARY nodes of elements which
+%constitute the mash. The AREA of each element is also calculated.
+%Message to user:
+disp(' ');
+disp('---------------------------------------------------');
+disp('>> Preprocessing Pressure or Hydraulic head Equation...');
+disp(' ');
+preMPFAD=[];
+preMPFAQL=[];
+preNLTPFA=[];
+preMPFAH=[];
+preconcentraMPFAD=[];
+preconcentraNLTPFA=[];
+preGravity=[];
+preTPFA=[];
+time=0;
+%==========================================================================
+%% (1) Define the norm of permeability or conductivity hidraulic tensor ("normk")
+[env,parmRichardEq] = calcnormk(env, parmRichardEq,time);
+% calculate the weight
+if ismember(env.config.pmethod, {'mpfad','nlfvpp','mpfaql'})
+    %% (3) adequacao dos flags de contorno
+    [nflag,nflagface] = ferncodes_calflag(env,time);
+    %Call another parameters that I don't know.
+    [V,N,] = ferncodes_elementface(env);
+    %It switches according to "interptype"
+    zero=zeros(size(env.geometry.elem,1),1);
+    % calculo dos pesos que correspondem ao LPEW2
+    
+    %======================================================================
+    preMPFAD.nflag=nflag;
+    preMPFAD.nflagface=nflagface;
+    preMPFAD.V=V;
+    preMPFAD.N=N;
+    %[preMPFAD,weight,s] = ferncodes_Pre_LPEW_2(zero,preMPFAD,parmRichardEq,env);
+    [preMPFAD,weight,s] = ferncodes_Pre_LPEW_2_vect(zero,preMPFAD,parmRichardEq,env);  
+
+    %======================================================================
+    preNLTPFA.nflag=nflag;
+    preNLTPFA.V=V;
+    preNLTPFA.N=N;
+    preNLTPFA.weight=weight;
+    preNLTPFA.s=s;
+    %======================================================================
+    preMPFAQL.nflag=nflag;
+    preMPFAQL.V=V;
+    preMPFAQL.N=N;
+    preMPFAQL.weight=weight;
+    preMPFAQL.s=s;
+end
+% Physical and geometric parameters in relation to methods based on harmonic points
+if strcmp(env.config.pmethod,'mpfah')
+
+    p_old=1e1*ones(size(env.geometry.elem,1),1); % inicializando a pressao para metodo nao linear
+    % utilize tolerancia menor que 10^-12 para testes de convergencia
+    % Para teste de monotonicidade ou problemas bifásicos utilize 10^-8.
+    % # iterações de Picard
+    % faces alrededor de um elemento
+    [facelement]=ferncodes_elementfacempfaH;
+    % calculo dos pontos harmonicos
+    [pointarmonic]=ferncodes_harmonicopoint(kmap);
+    % calculo dos parametros ou constantes (ksi)
+    % temos usado este parametro durante muito tempo em muitos testes
+    [parameter,auxface]=ferncodes_coefficientmpfaH(facelement,pointarmonic,kmap);
+    %% (4) adequacao dos flag no ponto medio do contorno
+    nflagface= ferncodes_contflagface;
+    %% (5)adequacao dos flags no vertice do contorno
+    nflag = ferncodes_calflag(0);
+    % calculo dos pesos da interpolacao dos pontos harmonicos
+    [weightDMP]=ferncodes_weightnlfvDMP(kmap, env.geometry.elem);
+
+    preMPFAH.facelement=facelement;
+    preMPFAH.pointarmonic=pointarmonic;
+    preMPFAH.parameter=parameter;
+    preMPFAH.nflagce=nflagface;
+    preMPFAH.weightDMP=weightDMP;
+end
+
+% calculation of the gravitational flux
+if strcmp(env.config.keygravity,'y')
+    
+    if 200<env.config.numcase && env.config.numcase<300
+        [vec_gravelem,vec_gravface,]=PLUG_Gfunction;
+        [gravrate,]=gravitation(kmap,vec_gravelem,vec_gravface);
+    elseif env.config.numcase<200
+        [vec_gravelem,vec_gravface,]=PLUG_Gfunction;
+        [gravrate,]=gravitation(kmap,vec_gravelem,vec_gravface);
+    end
+    preGravity.gravrate=gravrate;
+end
+%--------------------------------------------------------------------------
+%Calculate the TRANSMISSIBILITY parameters:
+
+%Chose the type of MPFA according "pmethod"
+switch char(env.config.pmethod)
+    %Calculate the transmissibilities from TPFA
+    case 'tpfa'
+        %[transmvecleft,knownvecleft,Fg,bodyterm] = transmTPFA(kmap,0);
+        %nflag = ferncodes_calflag(0);
+        nflagface= ferncodes_contflagface;
+        %Get preprocessed terms:
+        [Hesq,Kde,Kn,Kt,Ded] = ferncodes_Kde_Ded_Kt_Kn(kmap,env.geometry.elem);
+        %Calculate the little matrices for MPFA-TPS (Aavatsmark et al., 1998)
+         preTPFA.nflagface=nflagface;
+         preTPFA.Hesq=Hesq;
+         preTPFA.Kde=Kde;
+         preTPFA.Kn=Kn;
+         preTPFA.Kt=Kt;
+         preTPFA.Ded=Ded;
+    case 'mpfad' %(Gao and Wu, 2010)
+        
+        %Get preprocessed terms:
+        [preMPFAD] =ferncodes_Kde_Ded_Kt_Kn(env, parmRichardEq,preMPFAD,time);
+       
+        %[flowrateZ,flowresultZ]=Zcontribution(kmap);
+        % for the concentration transport with pressure
+        if (200<env.config.numcase && env.config.numcase<300) ||...
+                (350<env.config.numcase && env.config.numcase<400)
+            %Get the initial condition
+            [Con,lastimelevel,lastimeval] = applyinicialcond;
+            % calculate the auxiliary parameters
+            [~,Kdec,Knc,Ktc,Dedc,wightc,sc,weightDMPc,dparameter ]=...
+                parametersauxiliary(dmap,N);
+            % flags boundary conditions
+            [nflagnoc,nflagfacec] = ferncodes_calflag_con(lastimeval);
+        preconcentraMPFAD.Con=Con;
+        preconcentraMPFAD.lastimelevel=lastimelevel;
+        preconcentraMPFAD.lastimeval=lastimeval;
+        preconcentraMPFAD.Kdec=Kdec;
+        preconcentraMPFAD.Knc=Knc;
+        preconcentraMPFAD.Ktc=Ktc;
+        preconcentraMPFAD.Dedc=Dedc;
+        preconcentraMPFAD.wightc=wightc;
+         preconcentraMPFAD.sc=sc;
+        preconcentraMPFAD.weightDMPc=weightDMPc;
+        preconcentraMPFAD.dparameter=dparameter;
+        preconcentraMPFAD.nflagnoc=nflagnoc;
+        preconcentraMPFAD.nflagfacec=nflagfacec;
+        end
+        
+        
+    case 'mpfaql' % Contreras et al, 2019
+        % calculo dos parametros ou constantes (ksi)
+        [parameter]=ferncodes_coefficient(kmap);
+        % calculo dos pesos DMP
+        [weightDMP]=ferncodes_weightnlfvDMP(kmap);
+
+        preMPFAQL.parameter=parameter;
+        preMPFAQL.weightDMP=weightDMP;
+    case 'nlfvpp' % Contreras et al., 2021
+        p_old=1e1*ones(size(env.geometry.elem,1),1); % inicializando a pressão
+
+        % utilize tolerancia menor que 10^-12 para testes de convergencia
+        % Para teste de monotonicidade ou problemas bifasicos utilize 10^-8.
+        % # iterações de Picard
+        %temos usado para muitos estes o seguinte rutina
+        [parameter,contnorm]=ferncodes_coefficient(kmap,env.geometry.elem);
+        preNLTPFA.p_old=p_old;
+        preNLTPFA.parameter=parameter;
+        preNLTPFA.contnorm=contnorm;
+        if 200<env.config.numcase && env.config.numcase<300
+            %Get the initial condition
+            [Con,lastimelevel,lastimeval] = applyinicialcond;
+            % calculate the auxiliary parameters
+            [Hesq,Kdec,Knc,Ktc,Dedc,wightc,sc,weightDMPc,dparameter ]=...
+                parametersauxiliary(dmap,N);
+            % flags boundary conditions
+            [nflagnoc,nflagfacec] = ferncodes_calflag_con(lastimeval);
+        end
+        preconcentraNLTPFA.Con=Con;
+        preconcentraNLTPFA.lastimelevel=lastimelevel;
+        preconcentraNLTPFA.lastimeval=lastimeval;
+        preconcentraNLTPFA.Kdec=Kdec;
+        preconcentraNLTPFA.Knc=Knc;
+        preconcentraNLTPFA.Ktc=Ktc;
+        preconcentraNLTPFA.Dedc=Dec;
+        preconcentraNLTPFA.weightDMPc=weightDMPc;
+        preconcentraNLTPFA.dparameter=dparameter;
+        preconcentraNLTPFA.nflagnoc=nflagnoc;
+        preconcentraNLTPFA.nflagfacec=nflagfacec;
+        % contreras et al, 2016
+end  %End of SWITCH
+
+%Message to user:
+disp('>> "preMPFA" was finished with success!');
+
+%--------------------------------------------------------------------------
+%--------------------------------------------------------------------------
+%FUNCTION DEFINITION
+%--------------------------------------------------------------------------
+%--------------------------------------------------------------------------
+end
+%--------------------------------------------------------------------------
+% calculate the auxiliary parameters
+function       [Hesq,Kdec,Knc,Ktc,Dedc,weightc,sc,weightDMPc,dparameter ]=...
+    parametersauxiliary(dmap,N)
+global interptype elem
+
+% dmap: Valor medio do tensor de difusao molecular, usualmente esse tersor
+% consiera-se como homogeneo em todo o dominio
+if max(max(dmap))~=0
+    elem(:,5)=1;
+end
+%Get preprocessed terms:
+[Hesq,Kdec,Knc,Ktc,Dedc] = ferncodes_Kde_Ded_Kt_Kn(dmap, elem);
+%temos usado para muitos estes o seguinte rutina
+[dparameter,]=ferncodes_coefficient(dmap,elem);
+% calculo dos pesos DMP
+[weightDMPc]=ferncodes_weightnlfvDMP(dmap,elem);
+
+%It switches according to "interptype"
+switch char(interptype)
+    %LPEW 1
+    case 'lpew1'
+        % calculo dos pesos que correspondem ao LPEW1
+        [weightc,sc] = ferncodes_Pre_LPEW_1(dmap,N);
+        %LPEW 2
+    case 'lpew2'
+        % calculo dos pesos que correspondem ao LPEW2
+        [weightc,sc] = ferncodes_Pre_LPEW_2(dmap,N,1);
+
+end  %End of SWITCH
+end
+%--------------------------------------------------------------------------
+%FUNCTION "overedgesection"
+%--------------------------------------------------------------------------
+
+%This function find the half point of each straight line. After that obtain
+%%its coordinate.
+%"nodeval" is the node evaluated. This is one of two components calculated
+%by "interselemnode"
+function [coordsection] = overedgesection(edgematrix)
+%Define global parameters:
+global coord;
+
+%Initialize the matrix used in this function
+coordsection = zeros(size(edgematrix,1),3);
+%This loop swept among the limits stabelished above
+%"firstlim" and "lastlim" are parameters which define where the loop begins
+%and where its finish
+
+iover = 1:size(edgematrix,1);
+coordsection(iover,1:3) = 0.5*(coord(edgematrix(iover,1),:) + ...
+    coord(edgematrix(iover,2),:));
+end
+%--------------------------------------------------------------------------
+%Function "overedge"
+%--------------------------------------------------------------------------
+
+function [overedgecoord] = overedge
+%Define global parameters:
+global bedge inedge;
+
+%Initialize the matrix "overedgecoord"
+overedgecoord = zeros((size(bedge,1) + size(inedge,1)),3);
+
+%Fill "overedgecoord" (just edge over boundary)
+overedgecoord(1:size(bedge,1),:) = overedgesection(bedge);
+%Fill the "overedgecoord" rest (just edge inside domain)
+%"continedge" is an internal edge's counter
+overedgecoord(size(bedge,1) + 1:size(overedgecoord,1),:) = ...
+    overedgesection(inedge);
+%--------------------------------------------------------------------------
+end
+

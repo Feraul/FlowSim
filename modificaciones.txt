@@ -1,0 +1,35 @@
+No codigo Codes_unificado_2019
+
+1. mudamos preprocessor.m
+
+linha 2614 
+antes: pointflag = logical(bcflag(:,1) > 200 & bcflag(:,2) ~= 0); 
+
+depois: pointflag = logical(bcflag(:,1) > 100 & bcflag(:,2) ~= 0); 
+linha 1529
+
+depois: getflag = logical((bcflag(:,1) > 100 & bcflag(:,1) < 200 & ...
+            bcflag(:,2) > 0));
+
+antes: getflag = logical((bcflag(:,1) > 200 & bcflag(:,1) < 300 & ...
+            bcflag(:,2) > 0));
+
+linha 1571
+
+depois: getflag = logical(bcflag(:,1) > 100 & bcflag(:,1) < 200 & bcflag(:,2)==0);
+
+antes: getflag = logical(bcflag(:,1) > 200 & bcflag(:,1) < 300);
+
+
+attibibitialcond.m
+linha 258 adicionamos o case 231
+
+getsatandflag.m
+
+linha 48  
+
+antes: pointneumann = logical(bcflag(:,1) > 200 & bcflag(:,1) < 300 & ...
+        bcflag(:,2) ~= 0);
+
+depois: pointneumann = logical(bcflag(:,1) > 100 & bcflag(:,1) < 200 & ...
+        bcflag(:,2) ~= 0);

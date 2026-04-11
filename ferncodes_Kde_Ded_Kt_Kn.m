@@ -1,0 +1,271 @@
+function [preMPFAD] = ...
+    ferncodes_Kde_Ded_Kt_Kn(env,parmRichardEq,preMPFAD,time)
+
+% inicialiazacao de variaveis globais
+auxbedge   = env.geometry.bedge;
+auxinedge  = env.geometry.inedge;
+auxcoord   = env.geometry.coord;
+auxcentelem= env.geometry.centelem;
+auxnumcase = env.config.numcase;
+auxbcflag  = env.config.bcflag;
+
+auxelem    = env.geometry.elem;
+auxperm    = env.config.perm;
+normals    = env.geometry.normals;
+if env.config.numcase < 400 || isempty(parmRichardEq)
+    auxkmap = env.config.perm;
+else
+    auxkmap = parmRichardEq.auxperm;
+    % parâmetros de retenção (ajuste conforme seu código)
+    alpha = parmRichardEq.alpha;
+    pp    = parmRichardEq.pp;
+    q    = parmRichardEq.q;
+    nvg   = parmRichardEq.nvg;
+end
+
+
+% outros parâmetros não definidos no trecho (ajuste conforme seu código)
+no1   = env.geometry.inedge(:,1);
+no2   = env.geometry.inedge(:,2);
+
+nBedge = size(auxbedge,1);
+nIedge = size(auxinedge,1);
+nElem  = size(auxelem,1);
+
+% Inicialização das variáveis de saída
+Hesq        = zeros(nBedge,1);
+Kde         = zeros(nIedge,1);
+Ded         = zeros(nIedge,1);
+Kn          = zeros(nBedge,1);
+Kt          = zeros(nBedge,1);
+flowresultZ = zeros(nElem,1);
+flowrateZ   = zeros(nBedge + nIedge,1);
+
+
+nb = size(auxbedge,1);
+ni = size(auxinedge,1);
+
+%% =====================================================
+%% PREALLOC
+%% =====================================================
+
+Hesq = zeros(nb,1);
+Kde  = zeros(ni,1);
+Ded  = zeros(ni,1);
+Kn   = zeros(nb,1);
+Kt   = zeros(nb,1);
+
+flowrateZ   = zeros(nb+ni,1);
+flowresultZ = zeros(size(auxelem,1),1);
+
+%% =====================================================
+%% BOUNDARY EDGES GEOMETRY
+%% =====================================================
+
+v1 = auxcoord(auxbedge(:,2),:) - auxcoord(auxbedge(:,1),:);
+vm = 0.5*(auxcoord(auxbedge(:,2),:) + auxcoord(auxbedge(:,1),:));
+
+C1 = auxcentelem(auxbedge(:,3),:);
+
+ve2 = auxcoord(auxbedge(:,2),:) - C1;
+
+ce = cross(v1,ve2,2);
+
+nv = vecnorm(v1,2,2);
+
+
+Hesq = vecnorm(ce,2,2)./nv;
+
+lef = auxbedge(:,3);
+
+vx = v1(:,1);
+vy = v1(:,2);
+
+normv2 = vx.^2 + vy.^2;
+
+%% =====================================================
+%% PERMEABILITY (BOUNDARY)
+%% =====================================================
+
+matid = auxelem(auxbedge(:,3),5);
+
+K11 = auxkmap(matid,2);
+K12 = auxkmap(matid,3);
+K21 = auxkmap(matid,4);
+K22 = auxkmap(matid,5);
+
+%% =====================================================
+%% Kn and Kt (ANALYTICAL ROTATION)
+%% =====================================================
+
+Kn = (K11.*vy.^2 - 2*K12.*vx.*vy + K22.*vx.^2) ./ normv2;
+
+Kt = ((vy).*(K11.*vx + K12.*vy) + ...
+    (-vx) .*(K21.*vx + K22.*vy)) ./ normv2;
+
+%A = -Kn ./ Hesq;
+
+%% =====================================================
+%% FLOWRATE BOUNDARY
+%% =====================================================
+
+if 430<auxnumcase && auxnumcase<450 && auxnumcase~=436
+    % condicao de contorno de Dirichlet
+    mask102=  auxbedge(:,5)<200;
+    neg=preMPFAD.nflagface(:,2).*mask102;
+    Se =  1 ./ (1 + (-neg).^pp ).^q;
+
+    % Casos 431, 435 (mesma fórmula)
+    coef=(env.config.perm(1,2) .* (Se.^0.5) .* (1 - (1 - Se.^(1/q)).^q ).^2).*mask102;
+    K11 = auxkmap(matid,2).*(~mask102)+coef;
+    K12 = auxkmap(matid,3);
+    K21 = auxkmap(matid,4);
+    K22 = auxkmap(matid,5).*(~mask102)+coef;
+
+    Kn = (K11.*vy.^2 - 2*K12.*vx.*vy + K22.*vx.^2) ./ normv2;
+
+    Kt = ((vy).*(K11.*vx + K12.*vy) + ...
+        (-vx) .*(K21.*vx + K22.*vy)) ./ normv2;
+
+    A = Kn ./ Hesq;
+
+    flowrateZ(1:nb) = A .* nv .* (vm(:,2)-C1(:,2));
+    % condicao de contorno de Neumann
+    mask201 = auxbedge(:,5)==201;
+    if any(mask201)
+        if auxnumcase==431 || auxnumcase==432 || auxnumcase==435
+            flowrateZ(mask201)=0;
+        end
+    end
+
+    mask202 = auxbedge(:,5)==202 | auxbedge(:,5)==203;
+
+    flowrateZ(mask202)=A(mask202).*nv(mask202).*(vm(mask202,2)-C1(mask202,2));
+
+    if auxnumcase==435
+        mask101 = auxbedge(:,5)==101;
+        flowrateZ(mask101)=-flowrateZ(mask101);
+    end
+
+    if auxnumcase==431
+        flowresultZ = flowresultZ + accumarray(lef,flowrateZ(1:nb),size(flowresultZ));
+    else
+        flowresultZ = flowresultZ - accumarray(lef,flowrateZ(1:nb),size(flowresultZ));
+    end
+
+end
+
+%% =====================================================
+%% INTERNAL EDGES GEOMETRY
+%% =====================================================
+
+C1 = auxcentelem(auxinedge(:,3),:);
+C2 = auxcentelem(auxinedge(:,4),:);
+
+lef = auxinedge(:,3);
+rel = auxinedge(:,4);
+
+vcen = C2 - C1;
+
+vd1 = auxcoord(auxinedge(:,2),:) - auxcoord(auxinedge(:,1),:);
+
+vx = vd1(:,1);
+vy = vd1(:,2);
+
+nv = vecnorm(vd1,2,2);
+normv2 = vx.^2 + vy.^2;
+
+vd2 = C2 - auxcoord(auxinedge(:,1),:);
+
+cd = cross(vd1,vd2,2);
+
+H2 = vecnorm(cd,2,2)./nv;
+
+ve2 = C1 - auxcoord(auxinedge(:,1),:);
+
+ce = cross(vd1,ve2,2);
+
+H1 = vecnorm(ce,2,2)./nv;
+
+no1 = auxcoord(auxinedge(:,1),2);
+no2 = auxcoord(auxinedge(:,2),2);
+
+%% =====================================================
+%% PERMEABILITY INTERNAL
+%% =====================================================
+
+matL = auxelem(auxinedge(:,3),5);
+matR = auxelem(auxinedge(:,4),5);
+
+K11L = auxkmap(matL,2);
+K12L = auxkmap(matL,3);
+K21L = auxkmap(matL,4);
+K22L = auxkmap(matL,5);
+
+K11R = auxkmap(matR,2);
+K12R = auxkmap(matR,3);
+K21R = auxkmap(matR,4);
+K22R = auxkmap(matR,5);
+
+%% =====================================================
+%% Kn Kt INTERNAL
+%% =====================================================
+
+Kn1 = (K11L.*vy.^2 - 2*K12L.*vx.*vy + K22L.*vx.^2) ./ normv2;
+
+Kt1 = ((vy).*(K11L.*vx + K12L.*vy) + ...
+    (-vx) .*(K21L.*vx + K22L.*vy)) ./ normv2;
+
+Kn2 = (K11R.*vy.^2 - 2*K12R.*vx.*vy + K22R.*vx.^2) ./ normv2;
+
+Kt2 = ((vy).*(K11R.*vx + K12R.*vy) + ...
+    (-vx) .*(K21R.*vx + K22R.*vy)) ./ normv2;
+
+
+%% =====================================================
+%% CONSTANTS INTERNAL
+%% =====================================================
+
+Kde = -nv .* ((Kn1.*Kn2)) ./ (Kn1.*H2 + Kn2.*H1);
+
+Ded = (dot(vd1,vcen,2)./(nv.^2)) - ...
+    (1./nv).*((Kt2./Kn2).*H1 + (Kt1./Kn1).*H2);
+
+%% =====================================================
+%% FLOW INTERNAL
+%% =====================================================
+
+if 430<auxnumcase && auxnumcase<450
+
+    idx = nb + (1:ni);
+
+    if auxnumcase==431
+
+        flowrateZ(idx) = -Kde .* ...
+            (auxcentelem(rel,2)-auxcentelem(lef,2)-Ded.*(no2-no1));
+
+        flowresultZ = flowresultZ + ...
+            accumarray(lef,flowrateZ(idx),size(flowresultZ)) - ...
+            accumarray(rel,flowrateZ(idx),size(flowresultZ));
+
+    elseif auxnumcase~=436
+
+        flowrateZ(idx) = Kde .* ...
+            (auxcentelem(rel,2)-auxcentelem(lef,2)-Ded.*(no2-no1));
+
+        flowresultZ = flowresultZ - ...
+            accumarray(lef,flowrateZ(idx),size(flowresultZ)) + ...
+            accumarray(rel,flowrateZ(idx),size(flowresultZ));
+
+    end
+
+end
+preMPFAD.Hesq=Hesq;
+preMPFAD.Kde=Kde;
+preMPFAD.Kn=Kn;
+preMPFAD.Kt=Kt;
+preMPFAD.Ded=Ded;
+preMPFAD.flowrateZ=flowrateZ;
+preMPFAD.flowresultZ=flowresultZ;
+
+end
