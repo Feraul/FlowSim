@@ -5,7 +5,7 @@ inedge=env.geometry.inedge;
 coord=env.geometry.coord;
 elem=env.geometry.elem;
 elemarea=env.geometry.elemarea;
-erromethod='erromethod2';
+erromethod='erromethod1';
 % calculo das pressões máximas e minimas
 disp('>> Maximum pressure')
 pressuremax= max(p)
@@ -23,17 +23,19 @@ switch erromethod
 
         erropressure=sqrt(s/sum(elemarea));
         % calcula o erro respeito a velocidade
-        % Q=zeros(size(inedge,1),1);
-        % for i=1:size(inedge,1)+size(bedge,1)
-        %     if i>size(bedge,1)
-        %         Q(i,1)=elemarea(inedge(i-size(bedge,1),3))+elemarea(inedge(i-size(bedge,1),4));
-        %     else
-        %         Q(i,1)=elemarea(bedge(i,3));
-        %     end
-        % end
-        % e=-velanal-velnum;
-        % er=e.^2;
-        % errovelocity=sqrt((Q'*er)/sum(Q'));
+        Q=zeros(size(inedge,1),1);
+        for i=1:size(inedge,1)+size(bedge,1)
+            if i>size(bedge,1)
+                Q(i,1)=elemarea(inedge(i-size(bedge,1),3))+elemarea(inedge(i-size(bedge,1),4));
+            else
+                Q(i,1)=elemarea(bedge(i,3));
+            end
+        end
+        e=velanal - flowrate;
+        er=e.^2;
+        errovelocity=sqrt((Q'*er)/sum(Q'));
+        dt=(1/32);
+        errototal=((s/sum(elemarea))+dt*((Q'*er)/sum(Q')))^0.5
     case 'erromethod2'
         %% O calculo destes erros foram adaptados de Lipnikov et al 2010
         % calcula o erro respeito a pressão
@@ -45,16 +47,16 @@ switch erromethod
         end
         erropressure=sqrt(s1/s2);
         % calcula o erro respeito a velocidade
-        % Q=zeros(size(inedge,1),1);
-        % for i=1:size(inedge,1)+size(bedge,1)
-        %     if i>size(bedge,1)
-        %         Q(i,1)=0.5*(elemarea(inedge(i-size(bedge,1),3))+elemarea(inedge(i-size(bedge,1),4)));
-        %     else
-        %         Q(i,1)=elemarea(bedge(i,3));
-        %     end
-        % end
-        % e=-velanal-velnum;
-        % errovelocity=sqrt((Q'*e.^2)/sum(velanal.^2.*Q));
+         Q=zeros(size(inedge,1),1);
+         for i=1:size(inedge,1)+size(bedge,1)
+             if i>size(bedge,1)
+                 Q(i,1)=0.5*(elemarea(inedge(i-size(bedge,1),3))+elemarea(inedge(i-size(bedge,1),4)));
+             else
+                 Q(i,1)=elemarea(bedge(i,3));
+             end
+         end
+         e=-velanal-velnum;
+         errovelocity=sqrt((Q'*e.^2)/sum(velanal.^2.*Q));
     case 'erromethod3'
         %% O calculo destes erros foram adaptados de Eigestad 2005
         % calcula o erro respeito a pressão
@@ -121,6 +123,6 @@ switch erromethod
 end
 disp('>> Error level in the pressure field')
 erropressure
-%disp('>>  Error level in the velocity field')
-%errovelocity
+disp('>>  Error level in the velocity field')
+errovelocity
 end

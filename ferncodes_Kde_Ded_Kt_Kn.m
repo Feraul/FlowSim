@@ -1,15 +1,16 @@
 function [preMPFAD] = ...
-    ferncodes_Kde_Ded_Kt_Kn(env,parmRichardEq,preMPFAD,time)
+    ferncodes_Kde_Ded_Kt_Kn(env,parmRichardEq,preMPFAD)
 
 % inicialiazacao de variaveis globais
-auxbedge   = env.geometry.bedge;
-auxinedge  = env.geometry.inedge;
-auxcoord   = env.geometry.coord;
-auxcentelem= env.geometry.centelem;
-auxnumcase = env.config.numcase;
-auxbcflag  = env.config.bcflag;
+bedge   = env.geometry.bedge;
+inedge  = env.geometry.inedge;
+coord   = env.geometry.coord;
+centelem= env.geometry.centelem;
+numcase = env.config.numcase;
+bcflag  = env.config.bcflag;
 
-auxelem    = env.geometry.elem;
+elem    = env.geometry.elem;
+nelem      =size(elem,1);
 auxperm    = env.config.perm;
 normals    = env.geometry.normals;
 if env.config.numcase < 400 || isempty(parmRichardEq)
@@ -28,9 +29,9 @@ end
 no1   = env.geometry.inedge(:,1);
 no2   = env.geometry.inedge(:,2);
 
-nBedge = size(auxbedge,1);
-nIedge = size(auxinedge,1);
-nElem  = size(auxelem,1);
+nBedge = size(bedge,1);
+nIedge = size(inedge,1);
+nElem  = size(elem,1);
 
 % Inicialização das variáveis de saída
 Hesq        = zeros(nBedge,1);
@@ -42,32 +43,22 @@ flowresultZ = zeros(nElem,1);
 flowrateZ   = zeros(nBedge + nIedge,1);
 
 
-nb = size(auxbedge,1);
-ni = size(auxinedge,1);
-
-%% =====================================================
-%% PREALLOC
-%% =====================================================
-
-Hesq = zeros(nb,1);
-Kde  = zeros(ni,1);
-Ded  = zeros(ni,1);
-Kn   = zeros(nb,1);
-Kt   = zeros(nb,1);
+nb = size(bedge,1);
+ni = size(inedge,1);
 
 flowrateZ   = zeros(nb+ni,1);
-flowresultZ = zeros(size(auxelem,1),1);
+flowresultZ = zeros(size(elem,1),1);
 
 %% =====================================================
 %% BOUNDARY EDGES GEOMETRY
 %% =====================================================
 
-v1 = auxcoord(auxbedge(:,2),:) - auxcoord(auxbedge(:,1),:);
-vm = 0.5*(auxcoord(auxbedge(:,2),:) + auxcoord(auxbedge(:,1),:));
+v1 = coord(bedge(:,2),:) - coord(bedge(:,1),:);
+vm = 0.5*(coord(bedge(:,2),:) + coord(bedge(:,1),:));
 
-C1 = auxcentelem(auxbedge(:,3),:);
+Centro = centelem(bedge(:,3),:);
 
-ve2 = auxcoord(auxbedge(:,2),:) - C1;
+ve2 = coord(bedge(:,2),:) - Centro;
 
 ce = cross(v1,ve2,2);
 
@@ -76,7 +67,7 @@ nv = vecnorm(v1,2,2);
 
 Hesq = vecnorm(ce,2,2)./nv;
 
-lef = auxbedge(:,3);
+lef = bedge(:,3);
 
 vx = v1(:,1);
 vy = v1(:,2);
@@ -87,7 +78,7 @@ normv2 = vx.^2 + vy.^2;
 %% PERMEABILITY (BOUNDARY)
 %% =====================================================
 
-matid = auxelem(auxbedge(:,3),5);
+matid = elem(bedge(:,3),5);
 
 K11 = auxkmap(matid,2);
 K12 = auxkmap(matid,3);
@@ -103,54 +94,71 @@ Kn = (K11.*vy.^2 - 2*K12.*vx.*vy + K22.*vx.^2) ./ normv2;
 Kt = ((vy).*(K11.*vx + K12.*vy) + ...
     (-vx) .*(K21.*vx + K22.*vy)) ./ normv2;
 
-%A = -Kn ./ Hesq;
-
 %% =====================================================
 %% FLOWRATE BOUNDARY
 %% =====================================================
 
-if 430<auxnumcase && auxnumcase<450 && auxnumcase~=436
+if 430<numcase && numcase<450 && numcase~=436
     % condicao de contorno de Dirichlet
-    mask102=  auxbedge(:,5)<200;
-    neg=preMPFAD.nflagface(:,2).*mask102;
-    Se =  1 ./ (1 + (-neg).^pp ).^q;
+    %Se = ones(nelem,1);
+    maskT=  bedge(:,5)<200;
+    h_contorno=preMPFAD.nflagface(:,2);
+
+    mask = h_contorno <= 0;        % índices onde neg NÃO é positivo
 
     % Casos 431, 435 (mesma fórmula)
-    coef=(env.config.perm(1,2) .* (Se.^0.5) .* (1 - (1 - Se.^(1/q)).^q ).^2).*mask102;
-    K11 = auxkmap(matid,2).*(~mask102)+coef;
+    coef=env.config.perm(1,2) .* exp(alpha*h_contorno(mask));
+    K11 = auxkmap(matid,2).*(~maskT)+coef;
     K12 = auxkmap(matid,3);
     K21 = auxkmap(matid,4);
-    K22 = auxkmap(matid,5).*(~mask102)+coef;
+    K22 = auxkmap(matid,5).*(~maskT)+coef;
 
     Kn = (K11.*vy.^2 - 2*K12.*vx.*vy + K22.*vx.^2) ./ normv2;
 
     Kt = ((vy).*(K11.*vx + K12.*vy) + ...
         (-vx) .*(K21.*vx + K22.*vy)) ./ normv2;
+    B1 = bedge(:,1);
+    B2 = bedge(:,2);
+    lef = bedge(:,3);
+    coordB1 = coord(B1,:);
+    coordB2 = coord(B2,:);
 
-    A = Kn ./ Hesq;
+    edgevec = coordB1 - coordB2;
+    nor = sqrt(sum(edgevec.^2,2));
 
-    flowrateZ(1:nb) = A .* nv .* (vm(:,2)-C1(:,2));
+    O = centelem(lef,:);
+
+    c1 = coord(B1,2);
+    c2 = coord(B2,2);
+
+    A1 = -Kn ./ (Hesq.* nv);
+    term1 = sum((O-coordB2).*(coordB1-coordB2),2).*c1;
+    term2 = sum((O-coordB1).*(coordB2-coordB1),2).*c2;
+
+     flowrateZ(1:nb,1) = A1.*(term1+term2-(nor.^2).*Centro(:,2)) -(c2-c1).*Kt;
+
+    %---------------------------------------------------------------------
     % condicao de contorno de Neumann
-    mask201 = auxbedge(:,5)==201;
+    mask201 = bedge(:,5)==201;
     if any(mask201)
-        if auxnumcase==431 || auxnumcase==432 || auxnumcase==435
+        if numcase==431 || numcase==432 || numcase==435
             flowrateZ(mask201)=0;
         end
     end
 
-    mask202 = auxbedge(:,5)==202 | auxbedge(:,5)==203;
+    mask202 = bedge(:,5)==202 | bedge(:,5)==203;
 
-    flowrateZ(mask202)=A(mask202).*nv(mask202).*(vm(mask202,2)-C1(mask202,2));
+    flowrateZ(mask202)=A1(mask202).*nv(mask202).*(vm(mask202,2)-Centro(mask202,2));
 
-    if auxnumcase==435
-        mask101 = auxbedge(:,5)==101;
+    if numcase==435
+        mask101 = bedge(:,5)==101;
         flowrateZ(mask101)=-flowrateZ(mask101);
     end
 
-    if auxnumcase==431
+    if numcase==431
         flowresultZ = flowresultZ + accumarray(lef,flowrateZ(1:nb),size(flowresultZ));
     else
-        flowresultZ = flowresultZ - accumarray(lef,flowrateZ(1:nb),size(flowresultZ));
+        flowresultZ = flowresultZ + accumarray(lef,flowrateZ(1:nb),size(flowresultZ));
     end
 
 end
@@ -159,15 +167,15 @@ end
 %% INTERNAL EDGES GEOMETRY
 %% =====================================================
 
-C1 = auxcentelem(auxinedge(:,3),:);
-C2 = auxcentelem(auxinedge(:,4),:);
+C1 = centelem(inedge(:,3),:);
+C2 = centelem(inedge(:,4),:);
 
-lef = auxinedge(:,3);
-rel = auxinedge(:,4);
+lef = inedge(:,3);
+rel = inedge(:,4);
 
 vcen = C2 - C1;
 
-vd1 = auxcoord(auxinedge(:,2),:) - auxcoord(auxinedge(:,1),:);
+vd1 = coord(inedge(:,2),:) - coord(inedge(:,1),:);
 
 vx = vd1(:,1);
 vy = vd1(:,2);
@@ -175,27 +183,27 @@ vy = vd1(:,2);
 nv = vecnorm(vd1,2,2);
 normv2 = vx.^2 + vy.^2;
 
-vd2 = C2 - auxcoord(auxinedge(:,1),:);
+vd2 = C2 - coord(inedge(:,1),:);
 
 cd = cross(vd1,vd2,2);
 
 H2 = vecnorm(cd,2,2)./nv;
 
-ve2 = C1 - auxcoord(auxinedge(:,1),:);
+ve2 = C1 - coord(inedge(:,1),:);
 
 ce = cross(vd1,ve2,2);
 
 H1 = vecnorm(ce,2,2)./nv;
 
-no1 = auxcoord(auxinedge(:,1),2);
-no2 = auxcoord(auxinedge(:,2),2);
+no1 = coord(inedge(:,1),2);
+no2 = coord(inedge(:,2),2);
 
 %% =====================================================
 %% PERMEABILITY INTERNAL
 %% =====================================================
 
-matL = auxelem(auxinedge(:,3),5);
-matR = auxelem(auxinedge(:,4),5);
+matL = elem(inedge(:,3),5);
+matR = elem(inedge(:,4),5);
 
 K11L = auxkmap(matL,2);
 K12L = auxkmap(matL,3);
@@ -235,23 +243,23 @@ Ded = (dot(vd1,vcen,2)./(nv.^2)) - ...
 %% FLOW INTERNAL
 %% =====================================================
 
-if 430<auxnumcase && auxnumcase<450
+if 430<numcase && numcase<450
 
     idx = nb + (1:ni);
 
-    if auxnumcase==431
-
-        flowrateZ(idx) = -Kde .* ...
-            (auxcentelem(rel,2)-auxcentelem(lef,2)-Ded.*(no2-no1));
-
-        flowresultZ = flowresultZ + ...
-            accumarray(lef,flowrateZ(idx),size(flowresultZ)) - ...
-            accumarray(rel,flowrateZ(idx),size(flowresultZ));
-
-    elseif auxnumcase~=436
+    if numcase==431 || numcase==437
 
         flowrateZ(idx) = Kde .* ...
-            (auxcentelem(rel,2)-auxcentelem(lef,2)-Ded.*(no2-no1));
+            (centelem(rel,2)-centelem(lef,2)-Ded.*(no2-no1));
+
+        flowresultZ = flowresultZ + ...
+            accumarray(lef,flowrateZ(idx),size(flowresultZ))- ...
+            accumarray(rel,flowrateZ(idx),size(flowresultZ));
+
+    elseif numcase~=436
+
+        flowrateZ(idx) = Kde .* ...
+            (centelem(rel,2)-centelem(lef,2)-Ded.*(no2-no1));
 
         flowresultZ = flowresultZ - ...
             accumarray(lef,flowrateZ(idx),size(flowresultZ)) + ...

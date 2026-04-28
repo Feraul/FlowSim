@@ -2,18 +2,19 @@
 
 function [M,I,elembedge] = ferncodes_globalmatrix(env,preMPFAD,parmRichardEq)
 % incializacao de parametros globais
-auxcoord=env.geometry.coord;
+coord=env.geometry.coord;
 auxelem=env.geometry.elem;
 auxesurn2=env.geometry.esurn2;
 auxesurn1=env.geometry.esurn1;
-auxbedge=env.geometry.bedge;
-auxinedge=env.geometry.inedge;
+bedge=env.geometry.bedge;
+inedge=env.geometry.inedge;
 auxcentelem=env.geometry.centelem;
 auxbcflag=env.config.bcflag;
 auxnumcase=env.config.numcase;
 auxnormals=env.geometry.normals;
 auxmodflowcompared=env.config.modflowcase;
 auxvicosity=env.config.visc;
+nflag=preMPFAD.nflag;
 
 % incializacao de parametros locais
 Kt=preMPFAD.Kt;
@@ -25,8 +26,8 @@ Ded=preMPFAD.Ded;
 %Constrói a matriz global.
 
 %Initialize "bedgesize" and "inedgesize"
-bedgesize = size(auxbedge,1);
-inedgesize = size(auxinedge,1);
+bedgesize = size(bedge,1);
+inedgesize = size(inedge,1);
 
 %Initialize "M" (global matrix) and "I" (known vector)
 M = sparse(size(auxelem,1),size(auxelem,1)); %Prealocação de M.
@@ -45,15 +46,15 @@ isSat    = (30  < auxnumcase && auxnumcase < 200);
 is2phase = isConc && ismember(auxnumcase,[245 246 247 248 249 251]);
 
 % boundary edges
-v1b   = auxbedge(:,1);
-v2b   = auxbedge(:,2);
-elemL = auxbedge(:,3);
-flagb = auxbedge(:,5);
+v1b   = bedge(:,1);
+v2b   = bedge(:,2);
+elemL = bedge(:,3);
+flagb = bedge(:,5);
 
-v0_b  = auxcoord(v2b,:) - auxcoord(v1b,:);
-v1_b  = auxcentelem(elemL,:) - auxcoord(v1b,:);
-v2_b  = auxcentelem(elemL,:) - auxcoord(v2b,:);
-nor_b = sqrt(sum((auxcoord(v1b,:) - auxcoord(v2b,:)).^2,2));
+v0_b  = coord(v2b,:) - coord(v1b,:);
+v1_b  = auxcentelem(elemL,:) - coord(v1b,:);
+v2_b  = auxcentelem(elemL,:) - coord(v2b,:);
+nor_b = sqrt(sum((coord(v1b,:) - coord(v2b,:)).^2,2));
 
 visonface_b = ones(bedgesize,1);
 if isConc && is2phase
@@ -63,10 +64,10 @@ elseif isSat
 end
 
 % internal edges
-e1 = auxinedge(:,1);
-e2 = auxinedge(:,2);
-eL = auxinedge(:,3);
-eR = auxinedge(:,4);
+e1 = inedge(:,1);
+e2 = inedge(:,2);
+eL = inedge(:,3);
+eR = inedge(:,4);
 
 visonface_i = ones(inedgesize,1);
 if isConc && is2phase
@@ -100,8 +101,8 @@ lefD  = elemL(isDir);
 v1n   = v1b(isDir);
 v2n   = v2b(isDir);
 
-c1D = preMPFAD.nflag(v1n,2);
-c2D = preMPFAD.nflag(v2n,2);
+c1D = nflag(v1n,2);
+c2D = nflag(v2n,2);
 
 KnD   = preMPFAD.Kn(isDir);
 HesqD = preMPFAD.Hesq(isDir);
@@ -127,7 +128,7 @@ valsI_N = zeros(nnz(isNeu),1);
 
 if auxnumcase==341 || auxnumcase==341.1
     % ponto médio da aresta
-    a1 = 0.5*(auxcoord(v1b(isNeu),:) + auxcoord(v2b(isNeu),:));
+    a1 = 0.5*(coord(v1b(isNeu),:) + coord(v2b(isNeu),:));
     if auxnumcase==341
         auxk = arrayfun(@(x,y) ferncodes_K(x,y), a1(:,1), a1(:,2));
     else
@@ -160,29 +161,29 @@ colsM_I = [eL; eR; eR; eL];
 valsM_I = [-kI; +kI; -kI; +kI];
 
 % I contribuições por Dirichlet em vértices
-maskD1 = preMPFAD.nflag(e1,1) < 200;
-maskD2 = preMPFAD.nflag(e2,1) < 200;
+maskD1 = nflag(e1,1) < 200;
+maskD2 = nflag(e2,1) < 200;
 
 valsI_L = zeros(size(I));
 valsI_R = zeros(size(I));
 
 % vértice 1
-kD1 = kI(maskD1) .* preMPFAD.Ded(maskD1) .* preMPFAD.nflag(e1(maskD1),2);
+kD1 = kI(maskD1) .* preMPFAD.Ded(maskD1) .* nflag(e1(maskD1),2);
 idxL1 = eL(maskD1);
 idxR1 = eR(maskD1);
 valsI_L = accumarray(idxL1, -kD1, size(I));
 valsI_R = valsI_R + accumarray(idxR1, +kD1, size(I));
 
 % vértice 2
-kD2 = kI(maskD2) .* preMPFAD.Ded(maskD2) .* preMPFAD.nflag(e2(maskD2),2);
+kD2 = kI(maskD2) .* preMPFAD.Ded(maskD2) .* nflag(e2(maskD2),2);
 idxL2 = eL(maskD2);
 idxR2 = eR(maskD2);
 valsI_L = valsI_L + accumarray(idxL2, +kD2, size(I));
 valsI_R = valsI_R + accumarray(idxR2, -kD2, size(I));
 
 % Neumann em vértices (201/202)
-maskN1 = (preMPFAD.nflag(e1,1)==201 | preMPFAD.nflag(e1,1)==202);
-maskN2 = (preMPFAD.nflag(e2,1)==201 | preMPFAD.nflag(e2,1)==202);
+maskN1 = (nflag(e1,1)==201 | nflag(e1,1)==202);
+maskN2 = (nflag(e2,1)==201 | nflag(e2,1)==202);
 
 kN1 = kI(maskN1) .* preMPFAD.Ded(maskN1) .* preMPFAD.s(e1(maskN1));
 idxL1N = eL(maskN1);
@@ -199,8 +200,8 @@ valsI_R = valsI_R + accumarray(idxR2N, -kN2, size(I));
 % -------------------------------------------------------------------------
 % CONTRIBUIÇÕES DOS NÓS COM nflag > 200 (esurn1/esurn2)
 % -------------------------------------------------------------------------
-maskInt1 = preMPFAD.nflag(e1,1) > 200;
-maskInt2 = preMPFAD.nflag(e2,1) > 200;
+maskInt1 = nflag(e1,1) > 200;
+maskInt2 = nflag(e2,1) > 200;
 
 % vértice 1
 edges1 = find(maskInt1);

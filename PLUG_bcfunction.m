@@ -19,13 +19,20 @@
 
 %--------------------------------------------------------------------------
 
-function [bcattrib] = PLUG_bcfunction(vertices,flagptr,time,env)
-
+function [bcattrib] = PLUG_bcfunction(vertices,flagptr,time,env,parmRichardEq)
+alpha=parmRichardEq.alpha;
+valuecontor=parmRichardEq.valuecontor;
 %Define a boolean parameter
-boolean = length(vertices) == 1;
+if size(vertices,2) > 1
+   coordmid=(env.geometry.coord(vertices(:,1),1:2)+env.geometry.coord(vertices(:,2),1:2))./2;
+   auxvertices(:,1)=1:size(flagptr,1);
+   vertices=auxvertices;
+else
+   coordmid=env.geometry.coord(1:size(vertices,1),1:2);
+
+end
+bcflag=env.config.bcflag;
 %Define the midpoint coordinate
-coordmid = mean(env.geometry.coord(vertices,1:2))*(1 - boolean) + ...
-    env.geometry.coord(vertices(1),1:2)*boolean;
 %Calculate the value of the boundary condition to parameters attributed
 %throughout the function
     switch env.config.numcase
@@ -37,7 +44,20 @@ coordmid = mean(env.geometry.coord(vertices,1:2))*(1 - boolean) + ...
             bcattrib= -3*time*coordmid (1)*(1-coordmid (1))*coordmid (2)*(1-coordmid (2))-1;
         %------------------------------------------------------------------
         %Example 2: homogeneous media with diagonal permeability tensor and 
-        %Dirichlet boundary condition. Edwards and M. Pal, 2008 (Case 2)  
+        %Dirichlet boundary condition. Edwards and M. Pal, 2008 (Case 2) 
+        case 437
+
+            for i=1:size(flagptr,1)
+               
+                if flagptr(i,1)==1
+                  vert=vertices(i,1);
+                  bcattrib(vert,1)=bcflag(1,2);
+                else
+                 vert=vertices(i,1);
+                 xi=exp(-alpha*valuecontor);
+                 bcattrib(vert,1)= (1/alpha).*log(xi+(1-xi).*sin(pi*coordmid(vert,1)./valuecontor));
+                end
+            end
         case 2
             bcattrib = cos(pi*coordmid(1))*cosh(pi*coordmid(2));
 

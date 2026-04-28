@@ -1,24 +1,26 @@
 function [M,I]=soil_properties(M,I,parmRichardEq,preMPFAD,env)
 
 
-auxelemarea=env.geometry.elemarea;
-auxflowresultZ=preMPFAD.flowresultZ;
+elemarea=env.geometry.elemarea;
+flowresultZ=preMPFAD.flowresultZ;
 
 h_n=parmRichardEq.h_init;
-h_kickoff=parmRichardEq.h_old;
+h_m=parmRichardEq.h_old;
 dt=parmRichardEq.dt;
 
 %-------------------------------------------------------------------------
-theta_n=thetafunction(h_n,parmRichardEq,env);
+% calcula theta inicial
+theta_n=thetafunction(h_n,parmRichardEq,env); 
+% calcula theta para cada intercao
+theta_m=thetafunction(h_m,parmRichardEq,env); 
+% capacidade de solo para cada iteracao
+soilwatercapac=SWcapacity(h_m,parmRichardEq,env); 
 
-theta_n1=thetafunction(h_kickoff,parmRichardEq,env);
+diff_theta=theta_m - theta_n;
 
-soilwatercapac=SWcapacity(h_kickoff,parmRichardEq,env);
+M=M+(dt^-1)*diag(soilwatercapac.*elemarea(:));
 
-diff_theta=theta_n1 - theta_n;
-
-M=M+(dt^-1)*diag(soilwatercapac.*auxelemarea(:));
-I=I+(dt^-1)*diag(soilwatercapac.*auxelemarea(:))*h_kickoff-...
-    (dt^-1)*diff_theta.*auxelemarea(:)+auxflowresultZ;
+I=I+(dt^-1).*diag(soilwatercapac.*elemarea(:))*h_m-...
+    (dt^-1)*diff_theta.*elemarea(:)-flowresultZ;
 
 end

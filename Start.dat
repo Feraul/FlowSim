@@ -26,14 +26,14 @@ y
 //***OBS.: Even if you chose [n], write below both the path and 
 //folder's name where you want to store your results:
 
-C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic406
+C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic407
 
 //Write below either a number or any other key word to feature the 
 //folder where the results will be stored:
 //***OBS.: If you set "0", the folder "Results" and other will be 
 //created into folder set above:
 
-testePPPPP
+teste_sem_contorno
 
 //--------------------------------------------------------------------
 //------------------------ Solver Properties -------------------------
@@ -129,20 +129,21 @@ lpew2
 
 //Write below the Tolerance for the non-linear system solution: 
 
-1e-8
+1e-7
 
 //Write below the Maximum Number of Iteraction allowed for the
 //non-linear system solution:
 
-2000 
+3000 
 
 // Qual acelerador da itera  o de Picard desja utilizar:
 //[FPI] ==> "full Picard"; 
 //[AA] ==> "Aceleration Anderson" ;
 //[RRE] ==> "Rank Reduced Extrapolation" ; 
 //[MPE] ==> "Minimal Polynomial Extrapolation ". 
+//[Lscheme] ==> L scheme
 
-FPI
+Lscheme
 
 //--------------------------------------------------------------------
 //Type of Solver for the Hyperbolic Equation (Saturation Equation)
@@ -334,9 +335,9 @@ upwd
 C:\Users\flc59\Documents\Malhas2
 
 //Write below the name of the mesh file. Use the extension *.msh: 
-//HermelineMeshModQuad_12_12
+//HermelineMeshModQuad_12_12, edwards_8_8
 
-edwards_32_32.msh
+malha_caso_infil_32_32.msh
 
 //--------------------------------------------------------------------
 //----------------------- Physical Parameters ------------------------
@@ -376,7 +377,7 @@ y
 
 //IMPORTANT: quando o problema é homogeneo
 
-0.03 0 0 0.03
+0.1 0 0 0.1
 
 //--------------------------------------------------------------------
 //Distribution of porosity:
@@ -433,7 +434,7 @@ s
 //state simulation (parameter of stop). Write below the amount of 
 //days or the PVI's value instead:
 
-1
+5
 
 //--------------------------------------------------------------------
 //------------------------ Boundary Condition ------------------------
@@ -451,10 +452,12 @@ s
 //1. The amount of boundary condition statment;
 //2. In another row, write the type of boundary condition 
 //(Dirichlet, Neumann or Periodic);
-//3. In the same row, put the algebric value of this BC.  
+//3. In the same row, put the algebric value of this BC.
+//4. When the Dirichlet contour receives a function, set flag 123456.
 
-1
-101 1     
+2
+101 -15.24
+102 123456     
 
 //--------------------------------------------------------------------
 //Treatment of Boundary Points
@@ -465,5 +468,5 @@ s
 //2. In another row, the sequence of codes to be associated with 
 //each point group. 
 
-1
-101 
+2
+101 102

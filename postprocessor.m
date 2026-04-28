@@ -1,7 +1,7 @@
 
 
 
-function postprocessor(pressure, watersaturation,flowrate ,...
+function postprocessor(pressure, watersaturation,normk ,...
     time, env, step, parmRichardEq)
 
 coord   = env.geometry.coord;
@@ -10,11 +10,11 @@ filepath = env.mainpathfolders.path;
 resfolder = env.mainpathfolders.resfolder;
 
 auxnumcase = env.config.numcase;
-if auxnumcase > 400
-    normk = parmRichardEq.normperm;
-else
-    normk = env.geometry.normperm;
-end
+% if auxnumcase > 400
+%     normk = parmRichardEq.normperm;
+% else
+%     normk = env.geometry.normperm;
+% end
 
 % Arquivo VTU
 fname_vtu = fullfile(filepath, resfolder, ['res_00' num2str(step) '.vtu']);
@@ -99,7 +99,7 @@ fprintf(fid, '          %.16E\n', watersaturation);
 fprintf(fid, '        </DataArray>\n');
 
 % Norm permeability
-fprintf(fid, '        <DataArray type="Float32" Name="NormPermeability" format="ascii">\n');
+fprintf(fid, '        <DataArray type="Float32" Name="FlowresultZ" format="ascii">\n');
 fprintf(fid, '          %.16E\n', normk);
 fprintf(fid, '        </DataArray>\n');
 

@@ -25,6 +25,8 @@ inedgesize = size(inedge,1);
 flowrate    = zeros(bedgesize+inedgesize,1);
 flowratedif = zeros(bedgesize+inedgesize,1);
 
+flowresult = zeros(size(centelem,1),1);
+
 %% ==================================================
 %% BOUNDARY EDGES  (VETORIZADO)
 %% ==================================================
@@ -52,8 +54,7 @@ A = Kn ./ (Hesq .* nor);
 term1 = sum((O-coordB2).*(coordB1-coordB2),2).*c1;
 term2 = sum((O-coordB1).*(coordB2-coordB1),2).*c2;
 
-flowrate_b = -A.*(term1+term2-(nor.^2).*p(lef)) ...
-             -(c2-c1).*Kt;
+flowrate_b = -A.*(term1+term2-(nor.^2).*p(lef)) -(c2-c1).*Kt;
 
 %% viscosity
 visonface = ones(bedgesize,1);
@@ -101,26 +102,23 @@ elseif 200<numcase && numcase<300
     end
 end
 
-flow_i = visonface_i .* Kde .* (p(rel)-p(lef)-Ded.*(p2-p1));
+flowrate(bedgesize+1:end,1) = visonface_i .* Kde .* (p(rel)-p(lef)-Ded.*(p2-p1));
 
-if numcase==435 || numcase==431
-    flow_i = flow_i - flowrateZ(bedgesize+1:bedgesize+inedgesize);
+if numcase==435 || numcase==431 || numcase==437
+    flowrate = flowrate + flowrateZ;
 end
-
-flowrate(bedgesize+1:end)=flow_i;
 
 %% ==================================================
 %% FLOWRESULT (ACCUMARRAY)
 %% ==================================================
+idx = bedgesize + (1:inedgesize);
+auxlef=bedge(:,3);
 
-nelem = size(centelem,1);
+flowresult = flowresult + accumarray(auxlef,flowrate(1:bedgesize),size(flowresult));
 
-left_contrib  = accumarray(lef, flow_i,[nelem 1]);
-right_contrib = accumarray(rel,-flow_i,[nelem 1]);
 
-flowresult = left_contrib + right_contrib;
-
-flowresult = flowresult + accumarray(bedge(:,3),flowrate_b,[nelem 1]);
+flowresult = flowresult + accumarray(lef,flowrate(idx),size(flowresult))- ...
+            accumarray(rel,flowrate(idx),size(flowresult));
 
 %% ==================================================
 %% DISPERSIVE FLOW

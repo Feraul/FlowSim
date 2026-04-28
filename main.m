@@ -43,6 +43,7 @@ inedgesize = size(env.geometry.inedge,1);
 kmapaux = env.config.perm(1,1);
 env.config.perm=[1 kmapaux 0  0 kmapaux];
 
+
 % ============================================================
 % CASOS 200–300 → Concentração
 % ============================================================
@@ -82,6 +83,11 @@ elseif 400 < env.config.numcase && env.config.numcase < 500
     source_wells= defineWells(env,parmRichardEq);
 
 end
+
+% ============================================================
+% Define the norm of permeability or conductivity hidraulic tensor ("normk")
+[env,parmRichardEq] = calcnormk(env, parmRichardEq,0);
+
 % ============================================================
 % CHAMADA FINAL
 % ============================================================

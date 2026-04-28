@@ -1,5 +1,5 @@
 function [x,erro,iter] = ferncodes_andersonacc2(x,auxtol,R0,env,parmRichardEq,...
-    preMPFAD,dt,time,wells,source)
+    preMPFAD,dt,time,source_wells)
 
 pmethod=env.config.pmethod;
 nltol=env.config.nltol;
@@ -90,7 +90,7 @@ if strcmp(pmethod,'nlfvpp')
     [M,I]=ferncodes_assemblematrixNLFVPP(pinterp_new,parameter,mobility,...
         contnorm,SS,dt,h,MM,gravrate,nflag);
     %Often it may change the global matrix "M"
-    [M_new,RHS_new] = addsource(sparse(M),I,wells);
+    [M_new,RHS_new] = addsource(sparse(M),I,source_wells);
     % Often with source term
     [RHS_new]=sourceterm(RHS_new,source);
 elseif  strcmp(pmethod,'nlfvh')
@@ -102,7 +102,7 @@ elseif  strcmp(pmethod,'nlfvh')
 
     [M,I]=ferncodes_assemblematrixNLFVH(pinterp_new,parameter,mobility);
     %Often it may change the global matrix "M"
-    [M_new,RHS_new] = addsource(sparse(M),I,wells);
+    [M_new,RHS_new] = addsource(sparse(M),I,source_wells);
 elseif strcmp(pmethod,'nlfvdmp')
     % interpolação nos nós ou faces
     [pinterp_new]=ferncodes_pressureinterpHP(x,nflag,parameter,weightDMP,mobility);
@@ -113,19 +113,19 @@ elseif strcmp(pmethod,'nlfvdmp')
     %Add a source therm to independent vector "mvector"
 
     %Often it may change the global matrix "M"
-    [M_new,RHS_new] = addsource(sparse(M),I,wells);
+    [M_new,RHS_new] = addsource(sparse(M),I,source_wells);
 elseif strcmp(pmethod,'mpfad')
 
     % Montagem da matriz global
-    [M,I,] = ferncodes_globalmatrix(env,preMPFAD,parmRichardEq,dt);
+    [M,I,] = ferncodes_globalmatrix(env,preMPFAD,parmRichardEq);
 
     %------------------------------------------------------------------
     %Add a source therm to independent vector "mvector"
     %Often it may change the global matrix "M" with wells
-    [M_new,I] = addsource(sparse(M),I,wells);
+    [M_new,I] = addsource(sparse(M),I,source_wells,env);
 
     % Often with source term
-    [RHS_new]=sourceterm(I,source);
+    [RHS_new]=sourceterm(I,source_wells);
 
 else
     [pinterp_new]=ferncodes_pressureinterpHP(x,nflag,parameter,weightDMP,mobility);
@@ -135,7 +135,7 @@ else
     %Add a source therm to independent vector "mvector"
 
     %Often it may change the global matrix "M"
-    [M_new,RHS_new] = addsource(sparse(M),I,wells);
+    [M_new,RHS_new] = addsource(sparse(M),I,source_wells);
     % Often with source term
     [RHS_new]=sourceterm(RHS_new,source);
 
@@ -154,7 +154,7 @@ for iter = 0:itmax
     % Apply g and compute the current residual norm.
 
     %tabletol(iter+1,1:2)=[iter, er];
-    if erro<str2num(nltol)
+    if erro<nltol
         break
     else
         if abs(erroaux1-erroaux2)<1e-10
@@ -293,7 +293,7 @@ for iter = 0:itmax
         [M,I]=ferncodes_assemblematrixNLFVPP(pinterp_new,parameter,...
             mobility,contnorm,SS,dt,h,MM,gravrate,nflag);
         %Often it may change the global matrix "M"
-        [M_new,RHS_new] = addsource(sparse(M),I,wells);
+        [M_new,RHS_new] = addsource(sparse(M),I,source_wells);
         % Often with source term
         [RHS_new]=sourceterm(RHS_new,source);
 
@@ -303,7 +303,7 @@ for iter = 0:itmax
 
         [M,I]=ferncodes_assemblematrixNLFVH(pinterp_new,parameter,mobility);
         %Often it may change the global matrix "M"
-        [M_new,RHS_new] = addsource(sparse(M),I,wells);
+        [M_new,RHS_new] = addsource(sparse(M),I,source_wells);
         % Often with source term
         [RHS_new]=sourceterm(RHS_new,source);
     elseif strcmp(pmethod,'nlfvdmp')
@@ -316,27 +316,27 @@ for iter = 0:itmax
         %Add a source therm to independent vector "mvector"
 
         %Often it may change the global matrix "M"
-        [M_new,RHS_new] = addsource(sparse(M),I,wells);
+        [M_new,RHS_new] = addsource(sparse(M),I,source_wells);
         % Often with source term
         [RHS_new]=sourceterm(RHS_new,source);
     elseif strcmp(pmethod,'mpfad')
         parmRichardEq.h_old=x;
         [env,parmRichardEq] = PLUG_kfunction(env,parmRichardEq,time);
-        [preMPFAD] = ferncodes_Kde_Ded_Kt_Kn(env,parmRichardEq,preMPFAD,time);
+        [preMPFAD] = ferncodes_Kde_Ded_Kt_Kn(env,parmRichardEq,preMPFAD);
         
         % calculo dos pesos que correspondem ao LPEW2
-        [preMPFAD,~,~] = ferncodes_Pre_LPEW_2_vect(zero,preMPFAD,parmRichardEq,env);
+        [preMPFAD,~,~] = ferncodes_Pre_LPEW_2_vect(preMPFAD,parmRichardEq,env);
 
         % Montagem da matriz global
-        [M,I,] = ferncodes_globalmatrix(env,preMPFAD,parmRichardEq,dt);
+        [M,I,] = ferncodes_globalmatrix(env,preMPFAD,parmRichardEq);
 
         %------------------------------------------------------------------
         %Add a source therm to independent vector "mvector"
         %Often it may change the global matrix "M" with wells
-        [M_new,I] = addsource(sparse(M),I,wells);
+        [M_new,I] = addsource(sparse(M),I,source_wells,env);
 
         % Often with source term
-        [RHS_new]=sourceterm(I,source);
+        [RHS_new]=sourceterm(I,source_wells);
     else
         [pinterp_new]=ferncodes_pressureinterpHP(x,nflag,parameter,weightDMP,mobility);
         %% Calculo da matriz global
@@ -345,7 +345,7 @@ for iter = 0:itmax
         %Add a source therm to independent vector "mvector"
 
         %Often it may change the global matrix "M"
-        [M_new,RHS_new] = addsource(sparse(M),I,wells);
+        [M_new,RHS_new] = addsource(sparse(M),I,source_wells);
         % Often with source term
         [RHS_new]=sourceterm(RHS_new,source);
     end

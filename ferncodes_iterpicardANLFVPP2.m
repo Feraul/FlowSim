@@ -1,6 +1,6 @@
 function [p,flowrate,flowresult,flowratedif,faceaux,parmRichardEq]=...
     ferncodes_iterpicardANLFVPP2(M_old,RHS_old,preMPFAD,...
-    parmRichardEq,env,wells,tempo,dt,source)
+    parmRichardEq,env,tempo,dt,source_wells)
 
 numcase=env.config.numcase;
 pmethod=env.config.pmethod;
@@ -21,11 +21,13 @@ zero=zeros(size(env.geometry.elem,1),1);
 parmRichardEq.h_old=p_oldold;
 %--------------------------------------------------------------------------
 [env,parmRichardEq] = PLUG_kfunction(env,parmRichardEq,tempo);
-[preMPFAD] = ferncodes_Kde_Ded_Kt_Kn(env,parmRichardEq,preMPFAD,tempo);
-[preMPFAD,~,~] = ferncodes_Pre_LPEW_2_vect(zero,preMPFAD,parmRichardEq,env);
+[preMPFAD] = ferncodes_Kde_Ded_Kt_Kn(env,parmRichardEq,preMPFAD);
+[preMPFAD,~,~] = ferncodes_Pre_LPEW_2_vect(preMPFAD,parmRichardEq,env);
 %--------------------------------------------------------------------------
-[p,erro,iter]=ferncodes_andersonacc2(p_oldold,1e-6,R0,env,parmRichardEq,...
-    preMPFAD,dt,tempo,wells,source);
+%[p,erro,iter]=ferncodes_andersonacc2(p_oldold,1e-6,R0,env,parmRichardEq,...
+%    preMPFAD,dt,tempo,source_wells);
+ [p,erro,iter] = ferncodes_andersonacc2_corrected(p_oldold,1e-6,R0,env,parmRichardEq,...
+    preMPFAD,dt,tempo,source_wells);
 
 
 %Message to user:

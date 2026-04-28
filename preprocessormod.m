@@ -46,7 +46,7 @@ disp('"elemarea" was generated!');
 disp('"bedge" was generated!');
 disp('"inedge" was generated!');
 %Get the normals
-normals = calcnormals(coord,centelem,bedge,inedge);
+[normals,unitnormals,medEdge] = calcnormals(coord,centelem,bedge,inedge);
 %Gives the information of "normals" generated
 disp('"normals" was generated!');
 
@@ -458,6 +458,8 @@ geometry.bedge        = bedge;
 geometry.inedge       = inedge;
 
 geometry.normals      = normals;
+geometry.medEdge      = medEdge;
+geometry.unitnormals  = unitnormals;
 
 %geometry.esureface1   = esureface1;
 %geometry.esureface2   = esureface2;
@@ -1101,7 +1103,7 @@ end
 %Function "calcnormals"
 %--------------------------------------------------------------------------
 
-function [normals] = calcnormals(coord, centelem, bedge, inedge)
+function [normals,unitnormals,medEdge] = calcnormals(coord, centelem, bedge, inedge)
 
 %% ============================================================
 % 1) MATRIZ DE ROTAÇÃO
@@ -1116,7 +1118,7 @@ nb = size(bedge,1);
 
 % Vetores das arestas
 vB = coord(bedge(:,2),:) - coord(bedge(:,1),:);
-
+medB=0.5.*(coord(bedge(:,2),:) + coord(bedge(:,1),:));
 % Normais rotacionadas
 normB = (R * vB')';
 
@@ -1127,6 +1129,7 @@ pointer = coord(bedge(:,1),:) - centelem(bedge(:,3),:);
 signFix = sign(sum(pointer .* normB, 2));
 normB = normB .* signFix;
 
+
 %% ============================================================
 % 3) NORMAIS DAS ARESTAS INTERNAS (inedge)
 % =============================================================
@@ -1135,13 +1138,14 @@ ni = size(inedge,1);
 
 vI = coord(inedge(:,2),:) - coord(inedge(:,1),:);
 normI = (R * vI')';
-
+medI=0.5.*(coord(inedge(:,2),:) + coord(inedge(:,1),:));
 %% ============================================================
 % 4) CONCATENAÇÃO FINAL
 % =============================================================
 
 normals = [normB; normI];
-
+unitnormals = [normB./vecnorm(normB,2,2); normI./vecnorm(normI,2,2)];
+medEdge=[medB;medI];
 end
 %--------------------------------------------------------------------------
 %FUNCTION "getsurnode"

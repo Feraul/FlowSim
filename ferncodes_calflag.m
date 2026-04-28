@@ -1,6 +1,7 @@
 %It is called by "preMPFA.m"
 
-function [nflag,nflagface] = ferncodes_calflag(env,time)
+function [nflag,nflagface] = ferncodes_calflag(env,parmRichardEq,time)
+    m=1;
     
     nelem_nodes = size(env.geometry.coord,1);
     nelem_faces = size(env.geometry.bedge,1);
@@ -18,8 +19,8 @@ function [nflag,nflagface] = ferncodes_calflag(env,time)
     face_idx    = env.geometry.bedge(:,1:2);
 
     % Mapeamento lógico para vértices
-    x_vertex = env.config.bcflag(:,1) == vertex_flag';   % matriz lógica (#bcflag × #faces)
-    x_face   = env.config.bcflag(:,1) == face_flag';     % idem
+    x_vertex = env.config.bcflag(:,1) == vertex_flag';   % (#bcflag × #faces)
+    x_face   = env.config.bcflag(:,1) == face_flag';
 
     % Para cada face, encontrar a linha correta de bcflag
     [~, bc_row_vertex] = max(x_vertex, [], 1);   % 1×#faces
@@ -30,37 +31,40 @@ function [nflag,nflagface] = ferncodes_calflag(env,time)
     bcflag_face   = env.config.bcflag(bc_row_face, :);
 
     % ============================================================
-    % CASO 341 e 341.1  (mesma lógica do seu código)
+    % CASO 341 e 341.1
     % ============================================================
     if env.config.numcase == 341 || env.config.numcase == 341.1
 
         % nflag para vértices
         nflag(vertex_idx,1) = bcflag_vertex(:,1);
-        nflag(vertex_idx,2) = arrayfun(@(v,r) PLUG_bcfunction(v,r,time,env), ...
-                                       vertex_idx, bc_row_vertex');
+
+        % *** VETORIZADO ***
+        nflag(vertex_idx,2) = PLUG_bcfunction(vertex_idx, bc_row_vertex', time, env);
 
         % nflagface para faces
         nflagface(:,1) = bcflag_face(:,1);
-        nflagface(:,2) = arrayfun(@(v1,v2,r) PLUG_bcfunction([v1 v2],r,time,env), ...
-                                  face_idx(:,1), face_idx(:,2), bc_row_face');
+
+        % *** VETORIZADO PARA FACES ***
+        v1 = face_idx(:,1);
+        v2 = face_idx(:,2);
+        nflagface(:,2) = PLUG_bcfunction([v1 v2], bc_row_face', time, env);
 
         return
     end
 
     % ============================================================
-    % CASOS 432 e 434 (têm lógica especial)
+    % CASOS 432 e 434
     % ============================================================
     if env.config.numcase == 432 || env.config.numcase == 434
 
         special = bcflag_vertex(:,1) == 101;
+        normal  = ~special;
 
         % Caso especial
         nflag(vertex_idx(special),1) = bcflag_vertex(special,1);
-        nflag(vertex_idx(special),2) = arrayfun(@(v,r) PLUG_bcfunction(v,r,time,env), ...
-                                                vertex_idx(special), bc_row_vertex(special)');
+        nflag(vertex_idx(special),2) = PLUG_bcfunction(vertex_idx(special), bc_row_vertex(special)', time, env);
 
         % Caso normal
-        normal = ~special;
         nflag(vertex_idx(normal),1) = bcflag_vertex(normal,1);
         nflag(vertex_idx(normal),2) = bcflag_vertex(normal,2);
 
@@ -68,12 +72,13 @@ function [nflag,nflagface] = ferncodes_calflag(env,time)
     end
 
     % ============================================================
-    % CASO PADRÃO (todos os outros)
+    % CASO PADRÃO
     % ============================================================
+
     nflag(vertex_idx,1) = bcflag_vertex(:,1);
-    nflag(vertex_idx,2) = arrayfun(@(v,r) PLUG_bcfunction(v,r,time,env), vertex_idx, bc_row_vertex');
-    nflagface(:,1)=bcflag_face(:,1);
-    nflagface(:,2) = arrayfun(@(v1,v2,r) PLUG_bcfunction([v1 v2],r,time,env), ...
-                                  face_idx(:,1), face_idx(:,2), bc_row_face');
+     mmmm= PLUG_bcfunction(vertex_idx, bc_row_vertex', time, env,parmRichardEq);
+    nflag(vertex_idx,2)=mmmm(vertex_idx);
+    nflagface(:,1) = bcflag_face(:,1);
+    nflagface(:,2) = PLUG_bcfunction([face_idx(:,1) face_idx(:,2)], bc_row_face', time, env,parmRichardEq);
 
 end

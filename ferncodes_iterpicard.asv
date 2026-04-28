@@ -11,17 +11,17 @@ h_kickoff=parmRichardEq.h_old;
 %% calculo do residuo Inicial
 R0=norm(M_old*h_kickoff-RHS_old);
 
-%% inicializando dados para iteração Picard
+%% inicializando dados para iteraÃ§Ã£o Picard
 step=0;
 er=1;
 while (nltol<er || nltol==er) && (step<maxiter)
-    % atualiza iterações
+    % atualiza iteraÃ§Ãµes
     step=step+1;
 
-    % --- bloco de estabilização L-scheme ---
+    % --- bloco de estabilizaÃ§Ã£o L-scheme ---
    n = size(M_old,1);
-   M_L   = M_old + 10 * speye(n);     % M^{(k)} + L I
-   RHS_L = RHS_old + 10 * parmRichardEq.h_old;      % RHS^{(k)} + L h^{(k)}
+   M_L   = M_old + 5 * speye(n);     % M^{(k)} + L I
+   RHS_L = RHS_old + 5 * parmRichardEq.h_old;      % RHS^{(k)} + L h^{(k)}
 
     p_new = solver(M_L,RHS_L);
     parmRichardEq.h_old=p_new;

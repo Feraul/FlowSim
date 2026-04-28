@@ -110,9 +110,17 @@ switch env.config.numcase
         
         h_init=-1*ones(size(env.geometry.elem,1),1);
         h_old=-5*ones(size(env.geometry.elem,1),1);
-        dt= (1/32)^2;
+        dt= (1/16);
         % chute inicial
-
+    case 437
+        coord=env.geometry.coord;
+        valuecontor=max(coord(:,1));
+        alpha=0.164;
+        theta_s=0.45;
+        theta_r=0.15;
+        h_init=-valuecontor*ones(size(env.geometry.elem,1),1);
+        h_old=-10*ones(size(env.geometry.elem,1),1);
+        dt=(1/16)^2;
 end
 parmRichardEq.theta_s=theta_s;
 parmRichardEq.theta_r=theta_r;
@@ -124,4 +132,5 @@ parmRichardEq.dt=dt;
 parmRichardEq.h_old=h_old;
 parmRichardEq.hs=hs;
 parmRichardEq.nvg=nvg;
+parmRichardEq.valuecontor=valuecontor;
 end

@@ -32,12 +32,11 @@ preGravity=[];
 preTPFA=[];
 time=0;
 %==========================================================================
-%% (1) Define the norm of permeability or conductivity hidraulic tensor ("normk")
-[env,parmRichardEq] = calcnormk(env, parmRichardEq,time);
+
 % calculate the weight
 if ismember(env.config.pmethod, {'mpfad','nlfvpp','mpfaql'})
-    %% (3) adequacao dos flags de contorno
-    [nflag,nflagface] = ferncodes_calflag(env,time);
+      %% (3) adequacao dos flags de contorno
+    [nflag,nflagface] = ferncodes_calflag(env,parmRichardEq,time);
     %Call another parameters that I don't know.
     [V,N,] = ferncodes_elementface(env);
     %It switches according to "interptype"
@@ -50,7 +49,7 @@ if ismember(env.config.pmethod, {'mpfad','nlfvpp','mpfaql'})
     preMPFAD.V=V;
     preMPFAD.N=N;
     %[preMPFAD,weight,s] = ferncodes_Pre_LPEW_2(zero,preMPFAD,parmRichardEq,env);
-    [preMPFAD,weight,s] = ferncodes_Pre_LPEW_2_vect(zero,preMPFAD,parmRichardEq,env);  
+    [preMPFAD,weight,s] = ferncodes_Pre_LPEW_2_vect(preMPFAD,parmRichardEq,env);  
 
     %======================================================================
     preNLTPFA.nflag=nflag;
@@ -127,7 +126,7 @@ switch char(env.config.pmethod)
     case 'mpfad' %(Gao and Wu, 2010)
         
         %Get preprocessed terms:
-        [preMPFAD] =ferncodes_Kde_Ded_Kt_Kn(env, parmRichardEq,preMPFAD,time);
+        [preMPFAD] =ferncodes_Kde_Ded_Kt_Kn(env, parmRichardEq,preMPFAD);
        
         %[flowrateZ,flowresultZ]=Zcontribution(kmap);
         % for the concentration transport with pressure

@@ -73,7 +73,7 @@ elseif env.config.numcase == 431
     sumax1 = 0;
 elseif env.config.numcase == 437
     wA=elemarea;
-    h_init_exact=h;%carga_hidraulica(centelem(:,1),centelem(:,2),0,parmRichardEq);
+    h_init_exact=carga_hidraulica(centelem(:,1),centelem(:,2),0,parmRichardEq);
     theta_init_exact=thetafunction(h_init_exact,parmRichardEq,env);
     theta_init_num=thetafunction(h,parmRichardEq,env);
     

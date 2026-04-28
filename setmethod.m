@@ -109,57 +109,5 @@ switch env.config.phasekey
         hydraulic_RE(env,preTPFA,preMPFAD,preMPFAH,parmRichardEq,source_wells);
 end  %End of SWITCH
 end
-%--------------------------------------------------------------------------
-%--------------------------------------------------------------------------
-%FUNCTION
-%--------------------------------------------------------------------------
-%--------------------------------------------------------------------------
 
-% Function "parametersauxiliary"
-function[Hesq,Kdec,Knc,Ktc,Dedc,wightc,sc,weightDMPc,nflag,dparameter ]=...
-    parametersauxiliary(dmap,N,lastimeval)
-global pmethod
-dparameter=0;
-Hesq=0;
-Kdec=0;
-Knc=0;
-Ktc=0; Dedc=0;
-% calculate the parameters for the dispersive flux
-if strcmp(pmethod,'nlfvpp')
-    %temos usado para muitos estes o seguinte rutina
-    [dparameter,]=ferncodes_coefficient(dmap);
-    % calculate inpertolation weigts
-    [wightc,sc] = ferncodes_Pre_LPEW_2_con(dmap,N);
-    weightDMPc=0;
-    % adequação dos flags de contorno
-    nflag = logical(lastimeval~=0)*ferncodes_calflag(lastimeval)+...
-        logical(lastimeval==0)*nflag;
-elseif strcmp(pmethod,'mpfaql')
-    %temos usado para muitos estes o seguinte rutina
-    [dparameter,]=ferncodes_coefficient(dmap);
-    [weightDMPc]=ferncodes_weightnlfvDMP(dmap);
-    % calculate inpertolation weigts
-
-    [wightc,sc] = ferncodes_Pre_LPEW_2_con(dmap,N);
-elseif strcmp(pmethod,'mpfah')
-    %temos usado para muitos estes o seguinte rutina
-    [dparameter,]=ferncodes_coefficient(dmap);
-    [weightDMPc]=ferncodes_weightnlfvDMP(dmap);
-    wightc=0;sc=0;
-elseif strcmp(pmethod,'mpfad')
-    %Get preprocessed terms:
-    [Hesq,Kdec,Knc,Ktc,Dedc] = ferncodes_Kde_Ded_Kt_Kn(dmap);
-    % calculate inpertolation weigts
-    weightDMPc=0;
-    [wightc,sc] = ferncodes_Pre_LPEW_2_con(dmap,N);
-
-    % adequação dos flags de contorno
-    nflag = logical(lastimeval~=0)*ferncodes_calflag(lastimeval)+...
-        logical(lastimeval==0)*nflag;
-elseif strcmp(pmethod,'tpfa')
-    %[transmvecleftc,knownvecleftc,] = transmTPFA(dmap,0);
-    [Hesq,Kdec,Knc,Ktc,Dedc] = ferncodes_Kde_Ded_Kt_Kn(dmap);
-    wightc=0;sc=0;weightDMPc=0;
-end
-end
 

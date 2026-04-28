@@ -23,9 +23,19 @@ elseif numcase == 436
     Capw(idx) = alpha*(nvg-1) .* ((-alpha*h(idx)).^(nvg-1)) .* ...
         (((-alpha*h(idx)).^nvg + 1).^((1/nvg) - 2));
 
+elseif numcase==437
+    
+    Capw(idx)=alpha.*(theta_s - theta_r).*exp(alpha.*h(idx));
+
 else
     
-    Capw(idx) = (theta_s-theta_r)*pp*q*alpha .* ((-alpha*h(idx)).^(pp-1)) .* ...
-        (1 + (-alpha*h(idx)).^pp).^((1/pp) - 2);
+   A = theta_s - theta_r;
+
+    % Termos auxiliares vetorizados
+    term1 = (-alpha .* h(idx)).^(pp-1);      % N×1
+    term2 = (1 + (-alpha .* h(idx)).^pp).^(-q-1);  % N×1
+
+    % Derivada final
+    Capw(idx) = A .* q .* pp .* alpha .* term1 .* term2;
 
 end

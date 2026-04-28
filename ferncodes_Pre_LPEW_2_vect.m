@@ -1,4 +1,4 @@
-function [preMPFAD,weight,s] = ferncodes_Pre_LPEW_2_vect(Sw,preMPFAD,parmRichardEq,env)
+function [preMPFAD,weight,s] = ferncodes_Pre_LPEW_2_vect(preMPFAD,parmRichardEq,env)
 auxnumcase = env.config.numcase;
 
 if auxnumcase > 400

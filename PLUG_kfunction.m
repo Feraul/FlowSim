@@ -24,11 +24,14 @@ iso = @(coef) [idx, coef, zeros(nelem,1), zeros(nelem,1), coef];
 compute431 = @() iso( env.config.perm(1,2) .* (Se.^0.5) .* (1 - (1 - Se.^(1/q)).^q ).^2 );
 
 % Casos 432, 433, 434 (mesma fórmula)
-compute432 = @() iso( env.config.perm(1,2) .* (Se.^0.5) .* (1 - (1 - Se.^(pp/(pp-1))).^q ).^2 );
+compute432 = @() iso( env.config.perm(1,2) .* (Se.^0.5) .* (1 - (1 - Se.^(1/q)).^q ).^2 );
 
 % Caso 436 (variação com nvg)
 compute436 = @(Theta, n) iso( env.config.perm(1,2) .* (Theta.^0.5) .* ...
     (1 - (1 - Theta.^(n/(n-1))).^((n-1)/n) ).^2 );
+
+% Caso 437
+compute437 = @(alpha,hidra) iso( env.config.perm(1,2) .* exp(alpha.*hidra));
 
 % Casos simples de h * constante
 hcoef = @(c) iso(parmRichardEq.h_init * c);
@@ -97,9 +100,17 @@ switch env.config.numcase
 
         auxkmap=iso(env.config.perm(1,2).*ones(nelem,1));
         env.geometry.elem(:,5) = idx;
-        
+    case 437
+        h_old=parmRichardEq.h_old;
+        alpha=parmRichardEq.alpha;
+        kmap = compute437(alpha,h_old);
+        parmRichardEq.auxperm=kmap;
+
+        auxkmap=iso(env.config.perm(1,2).*ones(nelem,1));
+        env.geometry.elem(:,5) = idx;
+
     case 21.1
-        % Extraer coordenadas
+        % Extraer coordenadas 
         x = centelem(:,1);
         y = centelem(:,2);
 

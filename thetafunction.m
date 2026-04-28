@@ -22,13 +22,17 @@ if auxnumcase == 436
 
     % h >= 0
     theta(idx_pos) = 1;
+elseif auxnumcase==437
+    idx_neg = h < 0;          % índices onde h < 0
+    idx_pos = ~idx_neg;       % índices onde h >= 0
 
+    theta(idx_neg)=theta_r + (theta_s - theta_r).*exp(alpha*h(idx_neg));
 else
     idx_neg = h < 0;
     idx_pos = ~idx_neg;
 
     % h < 0
-    theta(idx_neg) = theta_r + ((theta_s - theta_r) ./ (1 + abs(alpha*h(idx_neg)).^pp).^q);
+    theta(idx_neg) = theta_r + ((theta_s - theta_r) ./ ((1 + (-alpha*h(idx_neg)).^pp).^q));
 
     % h >= 0
     theta(idx_pos) = theta_s;
