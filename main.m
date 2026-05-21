@@ -85,14 +85,15 @@ elseif 400 < env.config.numcase && env.config.numcase < 500
 end
 
 % ============================================================
-% Define the norm of permeability or conductivity hidraulic tensor ("normk")
+% Define the norm of permeability or conductivity hidraulic 
+% tensor ("normk")
 [env,parmRichardEq] = calcnormk(env, parmRichardEq,0);
-
+%=============================================================
+% flag boundary condition
+[env] = ferncodes_calflag(env,parmRichardEq,0);
 % ============================================================
 % CHAMADA FINAL
 % ============================================================
-
 setmethod(source_wells, 'i', 8, env, parmconcentra, parmgroundwater,...
           parmRichardEq);
 toc
-

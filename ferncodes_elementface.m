@@ -168,6 +168,7 @@ for No=1:size(coord,1)
     m1=1;
     vetor1=nsurn1(nsurn2(No)+1:nsurn2(No+1));
     for j= [vetor1']
+        
         %ibedge=find(((bedge(:,1)==No & bedge(:,2)==j)|(bedge(:,1)==j & bedge(:,2)==No)));
         b=logical(((bedge(:,1)==No & bedge(:,2)==j)|(bedge(:,1)==j & bedge(:,2)==No)));
         key=1:length(b);

@@ -17,7 +17,7 @@ Ded=preMPFAD.Ded;
 Kn=preMPFAD.Kn;
 Kt=preMPFAD.Kt;
 Hesq=preMPFAD.Hesq;
-nflag=preMPFAD.nflag;
+nflag=env.config.nflag;
 
 bedgesize = size(bedge,1);
 inedgesize = size(inedge,1);

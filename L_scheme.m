@@ -6,12 +6,11 @@ function [p,flowrate,flowresult,flowratedif,faceaux,parmRichardEq,preMPFAD]=...
 nltol=env.config.nltol;
 maxiter=env.config.maxiter;
 pmethod=env.config.pmethod;
-nflag=preMPFAD.nflag;
 h_kickoff=parmRichardEq.h_old;
 %% Parâmetros do L‑scheme adaptativo
 L_min = 1e-3;          % valor mínimo de L
 L_max = 1e4;           % valor máximo de L
-L     = 10;            % valor inicial (pode vir de uma estimativa)
+L     = 0.3;            % valor inicial (pode vir de uma estimativa)
 relax = 1.0;           % fator de relaxação (1.0 = sem relaxação)
 gamma = 0.9;           % fator de redução de L quando convergência boa
 beta  = 2.0;           % fator de aumento de L quando resíduo sobe
@@ -32,7 +31,7 @@ while (er > nltol) && (step < maxiter)
     % p_new = M_L \ RHS_L;           % direto (apenas para pequenos problemas)
     [p_new, flag] = pcg(M_L, RHS_L, 1e-8, 500);  % CG com tolerância
     if flag ~= 0
-        warning('PCG não convergiu, usando direto');
+        %warning('PCG não convergiu, usando direto');
         p_new = M_L \ RHS_L;
     end
     
@@ -74,7 +73,7 @@ while (er > nltol) && (step < maxiter)
         % Aumenta relaxação de volta para 1
         relax = min(1.0, relax * 1.05);
         % Aceita a solução
-        parmRichardEq.h_old = p_new;
+        %parmRichardEq.h_old = p_new;
         M_old = M_new;
         RHS_old = RHS_new;
         %R_old = R_new;

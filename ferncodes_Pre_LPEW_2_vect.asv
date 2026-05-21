@@ -204,7 +204,7 @@ for y = 1:nNodes
             elseif (k==nec+1)&&(size(P,1)~=size(O,1))
                 zetan=Kn2(k-1)*cot(ve1(k-1))+Kt2(k-1);
                 zetad=Kn1(k-1,2)*cot(theta2(k-1))-Kt1(k-1,2);
-                %r(No,2)=1+(zetan/zetad);
+                r(No,2)=1+(zetan/zetad);
                 % comentei porque ja coloquei a norma em Pre_LPEW2 linha 55
                 r(No,2)=(1+(zetan/zetad))*norm(Qo-T(nec+1,:));
             else
@@ -287,12 +287,11 @@ for y = 1:nNodes
         if comp1 <= size(env.geometry.bedge,1) && comp2 <= size(env.geometry.bedge,1) && 200 < env.geometry.bedge(MMM,4)
             a = env.config.bcflag(:,1) == env.geometry.bedge(comp1,5);
             s1 = find(a == 1);
-            flux1=env.config.bcflag(s1,2);
             b = env.config.bcflag(:,1) == env.geometry.bedge(comp2,5);
             s2 = find(b == 1);
-            flux2=env.config.bcflag(s2,2);
 
-            s(No,1) = -(1/sum(lambda))*(r(No,1)*flux1 + r(No,2)*flux2);
+            s(No,1) = -(1/sum(lambda))*(r(No,1)*env.config.bcflag(s1,2) + ...
+                r(No,2)*env.config.bcflag(s2,2));
         end
     end
 end

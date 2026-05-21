@@ -26,14 +26,14 @@ y
 //***OBS.: Even if you chose [n], write below both the path and 
 //folder's name where you want to store your results:
 
-C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic407
+C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409
 
 //Write below either a number or any other key word to feature the 
 //folder where the results will be stored:
 //***OBS.: If you set "0", the folder "Results" and other will be 
 //created into folder set above:
 
-teste_sem_contorno
+teste_60graus
 
 //--------------------------------------------------------------------
 //------------------------ Solver Properties -------------------------
@@ -143,7 +143,7 @@ lpew2
 //[MPE] ==> "Minimal Polynomial Extrapolation ". 
 //[Lscheme] ==> L scheme
 
-Lscheme
+FPI
 
 //--------------------------------------------------------------------
 //Type of Solver for the Hyperbolic Equation (Saturation Equation)
@@ -337,7 +337,7 @@ C:\Users\flc59\Documents\Malhas2
 //Write below the name of the mesh file. Use the extension *.msh: 
 //HermelineMeshModQuad_12_12, edwards_8_8
 
-malha_caso_infil_32_32.msh
+malha_infil_naoes_clement_mod.msh
 
 //--------------------------------------------------------------------
 //----------------------- Physical Parameters ------------------------
@@ -377,7 +377,7 @@ y
 
 //IMPORTANT: quando o problema é homogeneo
 
-0.1 0 0 0.1
+35 0 0 35
 
 //--------------------------------------------------------------------
 //Distribution of porosity:
@@ -434,7 +434,7 @@ s
 //state simulation (parameter of stop). Write below the amount of 
 //days or the PVI's value instead:
 
-5
+2
 
 //--------------------------------------------------------------------
 //------------------------ Boundary Condition ------------------------
@@ -455,9 +455,10 @@ s
 //3. In the same row, put the algebric value of this BC.
 //4. When the Dirichlet contour receives a function, set flag 123456.
 
-2
-101 -15.24
-102 123456     
+3
+201 0
+101 65
+202 148     
 
 //--------------------------------------------------------------------
 //Treatment of Boundary Points
@@ -468,5 +469,5 @@ s
 //2. In another row, the sequence of codes to be associated with 
 //each point group. 
 
-2
-101 102
+3
+201 101 202

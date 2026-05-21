@@ -26,7 +26,24 @@ elseif numcase == 436
 elseif numcase==437
     
     Capw(idx)=alpha.*(theta_s - theta_r).*exp(alpha.*h(idx));
+elseif numcase==438
 
+    Capw = zeros(size(h));      % inicializa
+    idx = (h <1);             % condição usada em todos os casos
+   Capw(idx)=(1/3).*(2-h(idx)).^(-4/3);
+elseif numcase==439
+    Capw = zeros(size(h));      % inicializa
+    idx = (h <0);             % condição usada em todos os casos
+    % diferença de umidade
+    Delta = theta_s - theta_r;
+
+    % módulo e sinal (vetorizados)
+    aps = abs(h(idx));
+    sgn = sign(h(idx));
+    c=40000;
+    D=2.9;
+    % derivada vetorizada
+    Capw(idx) = -(Delta .* c .* D .* aps.^(D-1) .* sgn) ./ (c + aps.^D).^2;
 else
     
    A = theta_s - theta_r;

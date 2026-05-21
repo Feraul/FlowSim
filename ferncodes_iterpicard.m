@@ -6,7 +6,6 @@ function [p,flowrate,flowresult,flowratedif,faceaux,parmRichardEq,preMPFAD]=...
 nltol=env.config.nltol;
 maxiter=env.config.maxiter;
 pmethod=env.config.pmethod;
-nflag=preMPFAD.nflag;
 h_kickoff=parmRichardEq.h_old;
 %% calculo do residuo Inicial
 R0=norm(M_old*h_kickoff-RHS_old);
@@ -20,8 +19,8 @@ while (nltol<er || nltol==er) && (step<maxiter)
 
     % --- bloco de estabilização L-scheme ---
    n = size(M_old,1);
-   M_L   = M_old + 10 * speye(n);     % M^{(k)} + L I
-   RHS_L = RHS_old + 10 * parmRichardEq.h_old;      % RHS^{(k)} + L h^{(k)}
+   M_L   = M_old + 0.01 * speye(n);     % M^{(k)} + L I
+   RHS_L = RHS_old + 0.01 * parmRichardEq.h_old;      % RHS^{(k)} + L h^{(k)}
 
     p_new = solver(M_L,RHS_L);
     parmRichardEq.h_old=p_new;

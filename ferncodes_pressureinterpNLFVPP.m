@@ -7,7 +7,7 @@ esurn2=env.geometry.esurn2;
 numcase=env.config.numcase;
 w=preMPFAD.weight;
 s=preMPFAD.s;
-nflagno=preMPFAD.nflag;
+nflag=env.config.nflag;
 
 nno = size(coord,1);
 pressurinterp = zeros(nno,1);
@@ -25,12 +25,12 @@ sum_press = accumarray(node_ids,vals,[nno 1]);
 pressurinterp = sum_press;
 
 % añadir contribución s si flag==202
-mask202 = (nflagno(:,1)==202);
+mask202 = (nflag(:,1)==202);
 pressurinterp(mask202) = pressurinterp(mask202) + s(mask202);
 
 % nodos con condición Dirichlet
-mask_dir = (nflagno(:,1)<=200);
-pressurinterp(mask_dir) = nflagno(mask_dir,2);
+mask_dir = (nflag(:,1)<=200);
+pressurinterp(mask_dir) = nflag(mask_dir,2);
 
 %% --- interpolación concentración ---
 if (200<numcase && numcase<300) || (379<numcase && numcase<400)

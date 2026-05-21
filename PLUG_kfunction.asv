@@ -144,12 +144,14 @@ switch env.config.numcase
         parmRichardEq.auxperm = [(1:N)', kmap];
         env.geometry.elem(:,5) = (1:N)';
     case 439
-        kr = ones(nelem,1);
-        
+        Se = ones(nelem,1);
+        n=parmRichardEq.pp;
+        q=parmRichardEq.q;
+        alpha=parmRichardEq.alpha;
         h=parmRichardEq.h_old;
-        neg=h<0;
-        kr(neg) = (2.99*10^(6)) ./ (2.99*10^(6)+ abs(h(neg)).^(5));
-        coef = env.config.perm(1,2) .*kr;
+        neg=h<=0;
+        Se(neg) = (2.99*10^(6)) ./ (2.99*10^(6)+ abs(h(neg)));
+        coef = env.config.perm(1,2) .* ;
         kmap=iso(coef);
         parmRichardEq.auxperm=kmap;
 

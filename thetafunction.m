@@ -3,7 +3,7 @@
 function  theta=thetafunction(h,parmRichardEq,env)
 
 
-auxnumcase=env.config.numcase;
+numcase=env.config.numcase;
 alpha=parmRichardEq.alpha;
 nvg=parmRichardEq.nvg;
 theta_s= parmRichardEq.theta_s;
@@ -13,7 +13,7 @@ q=parmRichardEq.q;
 
 theta = zeros(size(h));  % inicializa o vetor
 
-if auxnumcase == 436
+if numcase == 436
     idx_neg = h < 0;          % índices onde h < 0
     idx_pos = ~idx_neg;       % índices onde h >= 0
 
@@ -22,11 +22,22 @@ if auxnumcase == 436
 
     % h >= 0
     theta(idx_pos) = 1;
-elseif auxnumcase==437
+elseif numcase==437
     idx_neg = h < 0;          % índices onde h < 0
     idx_pos = ~idx_neg;       % índices onde h >= 0
 
     theta(idx_neg)=theta_r + (theta_s - theta_r).*exp(alpha*h(idx_neg));
+elseif numcase==438
+    theta = ones(size(h,1),1);  % inicializa o vetor
+    idx_neg = h < 1;          % índices onde h < 0
+    theta(idx_neg)=(2-h(idx_neg)).^(-1/3);
+elseif numcase==439
+    Se = ones(size(h,1),1);
+    theta = theta_s.*ones(size(h,1),1);  % inicializa o vetor
+    idx_neg = h < 0;          % índices onde h < 0
+    c=40000;
+    Se(idx_neg)=c./(c+abs(h(idx_neg)).^(2.9));
+    theta(idx_neg)=theta_r + (theta_s - theta_r) .*Se(idx_neg);
 else
     idx_neg = h < 0;
     idx_pos = ~idx_neg;

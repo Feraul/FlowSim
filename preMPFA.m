@@ -30,35 +30,26 @@ preconcentraMPFAD=[];
 preconcentraNLTPFA=[];
 preGravity=[];
 preTPFA=[];
-time=0;
 %==========================================================================
 
 % calculate the weight
 if ismember(env.config.pmethod, {'mpfad','nlfvpp','mpfaql'})
-      %% (3) adequacao dos flags de contorno
-    [nflag,nflagface] = ferncodes_calflag(env,parmRichardEq,time);
     %Call another parameters that I don't know.
     [V,N,] = ferncodes_elementface(env);
-    %It switches according to "interptype"
-    zero=zeros(size(env.geometry.elem,1),1);
+
     % calculo dos pesos que correspondem ao LPEW2
     
     %======================================================================
-    preMPFAD.nflag=nflag;
-    preMPFAD.nflagface=nflagface;
     preMPFAD.V=V;
     preMPFAD.N=N;
-    %[preMPFAD,weight,s] = ferncodes_Pre_LPEW_2(zero,preMPFAD,parmRichardEq,env);
     [preMPFAD,weight,s] = ferncodes_Pre_LPEW_2_vect(preMPFAD,parmRichardEq,env);  
 
     %======================================================================
-    preNLTPFA.nflag=nflag;
     preNLTPFA.V=V;
     preNLTPFA.N=N;
     preNLTPFA.weight=weight;
     preNLTPFA.s=s;
     %======================================================================
-    preMPFAQL.nflag=nflag;
     preMPFAQL.V=V;
     preMPFAQL.N=N;
     preMPFAQL.weight=weight;
@@ -78,8 +69,6 @@ if strcmp(env.config.pmethod,'mpfah')
     % calculo dos parametros ou constantes (ksi)
     % temos usado este parametro durante muito tempo em muitos testes
     [parameter,auxface]=ferncodes_coefficientmpfaH(facelement,pointarmonic,kmap);
-    %% (4) adequacao dos flag no ponto medio do contorno
-    nflagface= ferncodes_contflagface;
     %% (5)adequacao dos flags no vertice do contorno
     nflag = ferncodes_calflag(0);
     % calculo dos pesos da interpolacao dos pontos harmonicos
@@ -88,7 +77,6 @@ if strcmp(env.config.pmethod,'mpfah')
     preMPFAH.facelement=facelement;
     preMPFAH.pointarmonic=pointarmonic;
     preMPFAH.parameter=parameter;
-    preMPFAH.nflagce=nflagface;
     preMPFAH.weightDMP=weightDMP;
 end
 
@@ -112,17 +100,9 @@ switch char(env.config.pmethod)
     %Calculate the transmissibilities from TPFA
     case 'tpfa'
         %[transmvecleft,knownvecleft,Fg,bodyterm] = transmTPFA(kmap,0);
-        %nflag = ferncodes_calflag(0);
-        nflagface= ferncodes_contflagface;
         %Get preprocessed terms:
-        [Hesq,Kde,Kn,Kt,Ded] = ferncodes_Kde_Ded_Kt_Kn(kmap,env.geometry.elem);
-        %Calculate the little matrices for MPFA-TPS (Aavatsmark et al., 1998)
-         preTPFA.nflagface=nflagface;
-         preTPFA.Hesq=Hesq;
-         preTPFA.Kde=Kde;
-         preTPFA.Kn=Kn;
-         preTPFA.Kt=Kt;
-         preTPFA.Ded=Ded;
+        [preTPFA] =ferncodes_Kde_Ded_Kt_Kn(env, parmRichardEq,preTPFA);
+
     case 'mpfad' %(Gao and Wu, 2010)
         
         %Get preprocessed terms:

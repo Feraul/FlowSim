@@ -6,18 +6,10 @@
 %This routine receives geometry and physical data.
 function hydraulic_RE(env,preTPFA,preMPFAD,preMPFAH,parmRichardEq,source_wells)
 % inicializando variaveis globais
-centelem=env.geometry.centelem;
-numcase=env.config.numcase;
-elem=env.geometry.elem;
-inedge=env.geometry.inedge;
-bedge=env.geometry.bedge;
-dt= parmRichardEq.dt;
-alpha=parmRichardEq.alpha;
-nvg=parmRichardEq.nvg;
-normals=env.geometry.normals;
-coord=env.geometry.coord;
-finaltime=env.config.totaltime;
-elemarea=env.geometry.elemarea;
+centelem=env.geometry.centelem;numcase=env.config.numcase;elem=env.geometry.elem;
+inedge=env.geometry.inedge;bedge=env.geometry.bedge;dt= parmRichardEq.dt;
+alpha=parmRichardEq.alpha;nvg=parmRichardEq.nvg;normals=env.geometry.normals;
+coord=env.geometry.coord;finaltime=env.config.totaltime;elemarea=env.geometry.elemarea;
 
 % determina a altura 75 onde esta localizado a face
 afaceaux=find(abs(env.geometry.coord(env.geometry.inedge(:,1),2)-60)<1e-9);
@@ -37,13 +29,11 @@ haux             = 0;
 time             = 0;              % tempo (dimensional ou adimensional)
 stopcriteria     = 0;
 orderintimestep  = zeros(size(env.geometry.elem,1),1);
-timew            = 0;
 count            =1;
 auxcount         =1;
 count1           =1;
-zero             =zeros(size(env.geometry.elem,1),1);
-x = centelem(:,1);
-y = centelem(:,2);
+x                = centelem(:,1);
+y                = centelem(:,2);
 hnsum=0;
 
 h                = parmRichardEq.h_init;
@@ -71,6 +61,9 @@ elseif env.config.numcase == 431
     mmm   = (size(env.geometry.bedge,1)/2) + 1;
     sumax = 0;
     sumax1 = 0;
+elseif env.config.numcase == 436
+u_exact(:,count) = -0 .* x.*(1-x) .* y.*(1-y) - 1;
+
 elseif env.config.numcase == 437
     wA=elemarea;
     h_init_exact=h;%carga_hidraulica(centelem(:,1),centelem(:,2),0,parmRichardEq);
@@ -99,7 +92,6 @@ sum2           = 0;
 sum1           = 0;
 vnsum          =0;
 tic
-u_exact(:,count) = -0 .* x.*(1-x) .* y.*(1-y) - 1;
 %% ================== Loop temporal principal ==================
 while stopcriteria < 100
 
@@ -398,6 +390,27 @@ while stopcriteria < 100
             /(abs(sum2)*dt);
 
         count_aux=count_aux+1;
+    elseif numcase==438
+        p_oldaux1 = (h <1);
+        p_oldaux2 = (h >= 1);
+        p_old     = 10*p_oldaux2 - 10*p_oldaux1;
+        parmRichardEq.h_old=p_old;
+        parmRichardEq.h_init=h;
+        flowresultZ=preMPFAD.flowresultZ;
+         %------------------------------------------------------------------
+        postprocessor(h,0*h,0*flowresultZ,time_storage,env,count,...
+            parmRichardEq);
+    elseif numcase==439
+        p_oldaux1 = (h <0);
+        p_oldaux2 = (h >= 0);
+        p_old     = 20*p_oldaux2 - 20*p_oldaux1;
+        parmRichardEq.h_old=p_old;
+        parmRichardEq.h_init=h;
+        flowresultZ=preMPFAD.flowresultZ;
+         %------------------------------------------------------------------
+         h1=(h-(200-centelem(:,2)));
+        postprocessor(h,0*h,0*flowresultZ,time_storage,env,count,...
+            parmRichardEq);
 
     end
 
@@ -409,9 +422,7 @@ while stopcriteria < 100
 
         [preMPFAD,~,~] = ferncodes_Pre_LPEW_2_vect(preMPFAD,parmRichardEq,env);
         if numcase==436
-            [nflag, nflagface] = ferncodes_calflag(env,time);
-            preMPFAD.nflag=nflag;
-            preMPFAD.nflagface=nflagface;
+            [env] = ferncodes_calflag(env,parmRichardEq,time);
         end
     end
 
@@ -492,8 +503,6 @@ elseif numcase==437
     e=q-q_numerico;
     er=e.^2;
     vnsum=sqrt((Q'*er)/sum(Q));
-
-
 end
 if numcase==435
     % theta=thetafunction(h,theta_s,theta_r,alpha,pp,q);

@@ -141,21 +141,21 @@ switch env.config.numcase
         dt=(0.1)^1; %colocar para refinamento o dt
     case 439
         theta_s=0.3;
-        theta_r=0.0;
+        theta_r=0;
         
         centelem = env.geometry.centelem;
         mask = centelem(:,2) > 65;          % condição lógica para cada linha
         m=65-centelem(:,2);
         % Pré-alocação (opcional, mas boa prática)
-        h_init = m.*ones(size(centelem,1), 1);
+        h_init = zeros(size(centelem,1), 1);
         h_old  = zeros(size(centelem,1), 1);
 
         % Atribuição direta com máscara lógica
-        %h_init(mask)  = -135;
+        h_init(mask)  = -135;
         %h_init(~mask) = 65;
-        h_old(mask)   = -30;
+        h_old(mask)   = -50;
         h_old(~mask)  = 20;
-        dt=0.003; 
+        dt=0.01; 
 end
 parmRichardEq.theta_s=theta_s;
 parmRichardEq.theta_r=theta_r;

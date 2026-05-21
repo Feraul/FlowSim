@@ -1,6 +1,6 @@
 %It is called by "preMPFA.m"
 
-function [nflag,nflagface] = ferncodes_calflag(env,parmRichardEq,time)
+function [env] = ferncodes_calflag(env,parmRichardEq,time)
     m=1;
     
     nelem_nodes = size(env.geometry.coord,1);
@@ -79,6 +79,10 @@ function [nflag,nflagface] = ferncodes_calflag(env,parmRichardEq,time)
      mmmm= PLUG_bcfunction(vertex_idx, bc_row_vertex', time, env,parmRichardEq);
     nflag(vertex_idx,2)=mmmm(vertex_idx);
     nflagface(:,1) = bcflag_face(:,1);
-    nflagface(:,2) = PLUG_bcfunction([face_idx(:,1) face_idx(:,2)], bc_row_face', time, env,parmRichardEq);
+    nflagface(:,2) = PLUG_bcfunction([face_idx(:,1) face_idx(:,2)], ...
+        bc_row_face', time, env,parmRichardEq);
+
+    env.config.nflag=nflag;
+    env.config.nflagface=nflagface;
 
 end

@@ -14,14 +14,14 @@ if env.config.numcase < 400 || isempty(parmRichardEq)
     auxkmap = env.config.perm;
 else
     auxkmap = parmRichardEq.auxperm;
-    % parâmetros de retenção (ajuste conforme seu código)
+    % parÃ¢metros de retenÃ§Ã£o (ajuste conforme seu cÃ³digo)
     alpha = parmRichardEq.alpha;
     pp    = parmRichardEq.pp;
     q    = parmRichardEq.q;
     nvg   = parmRichardEq.nvg;
 end
 
-% Inicialização das variáveis de saída
+% InicializaÃ§Ã£o das variÃ¡veis de saÃ­da
 nb = size(bedge,1);
 ni = size(inedge,1);
 
@@ -81,17 +81,17 @@ if 430<numcase && numcase<450 && numcase~=436
     % condicao de contorno de Dirichlet
     %Se = ones(nelem,1);
     maskT=  bedge(:,5)<200;
-    h_contorno=nflagface(:,2);
-    % Casos 431, 435 (mesma fórmula)
+    h_contorno=nflagface(maskT,2);
+    % Casos 431, 435 (mesma fÃ³rmula)
     if numcase==437
-        mask = h_contorno <= 0;        % índices onde neg NÃO é positivo
+        mask = h_contorno <= 0;        % Ã­ndices onde neg NÃƒO Ã© positivo
         coef=env.config.perm(1,2) .* exp(alpha*h_contorno(mask));
         K11 = auxkmap(matid,2).*(~maskT)+coef;
         K12 = auxkmap(matid,3);
         K21 = auxkmap(matid,4);
         K22 = auxkmap(matid,5).*(~maskT)+coef;
     elseif numcase==438
-        mask = h_contorno <1;        % índices onde neg NÃO é positivo
+        mask = h_contorno <1;        % Ã­ndices onde neg NÃƒO Ã© positivo
         coef=env.config.perm(lef,2:5) .* (2-h_contorno(mask)).^(-1);
         K11 = auxkmap(matid,2).*(~maskT)+ coef(:,1);
         K12 = auxkmap(matid,3).*(~maskT)+ coef(:,2);
@@ -99,11 +99,8 @@ if 430<numcase && numcase<450 && numcase~=436
         K22 = auxkmap(matid,5).*(~maskT)+ coef(:,4);
     else
         coef=zeros(length(maskT),1);
-        mask = h_contorno <0; % índices onde neg NÃO é positivo
-        mask1=h_contorno>0;
-        coef(mask)= 35.*(2.99*10^(6)./(2.99*10^(6)+abs(h_contorno(mask)).^5));
-        coef(mask1)= 35;
-
+        mask = h_contorno <0;        % Ã­ndices onde neg NÃƒO Ã© positivo
+        coef(mask)=env.config.perm(mask,2) .* (40000./(40000+abs(h_contorno(mask)).^5));
         K11 = auxkmap(matid,2).*(~maskT)+coef;
         K12 = auxkmap(matid,3);
         K21 = auxkmap(matid,4);
@@ -137,9 +134,9 @@ if 430<numcase && numcase<450 && numcase~=436
 
     %---------------------------------------------------------------------
     % condicao de contorno de Neumann
-    mask201 = bedge(:,5)==201;
+    mask201 = bedge(:,5)>200;
     if any(mask201)
-        if numcase==431 || numcase==432 || numcase==435 || numcase==438 %|| numcase==439
+        if numcase==431 || numcase==432 || numcase==435 || numcase==438 || numcase==439
             flowrateZ(mask201)=0;
         end
     end

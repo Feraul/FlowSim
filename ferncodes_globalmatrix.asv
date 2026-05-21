@@ -19,14 +19,14 @@ Ded=preMPFAD.Ded;
 % incializacao de parametros locais
 Kt=preMPFAD.Kt;
 %-----------------------inicio da rOtina ----------------------------------%
-%ConstrÛi a matriz global.
+%Constr√≥i a matriz global.
 
 %Initialize "bedgesize" and "inedgesize"
 bedgesize = size(bedge,1);
 inedgesize = size(inedge,1);
 
 %Initialize "M" (global matrix) and "I" (known vector)
-M = sparse(size(auxelem,1),size(auxelem,1)); %PrealocaÁ„o de M.
+M = sparse(size(auxelem,1),size(auxelem,1)); %Prealoca√ß√£o de M.
 I = zeros(size(auxelem,1),1);
 m=0;
 jj=1;
@@ -35,7 +35,7 @@ elembedge=0;
 visonface = 1;
 %% ========================================================================
 % -------------------------------------------------------------------------
-% PR…-C¡LCULOS DE FLAGS E VISCOSIDADES
+% PR√â-C√ÅLCULOS DE FLAGS E VISCOSIDADES
 % -------------------------------------------------------------------------
 isConc   = (200 < auxnumcase && auxnumcase < 300);
 isSat    = (30  < auxnumcase && auxnumcase < 200);
@@ -73,7 +73,7 @@ elseif isSat
 end
 
 % -------------------------------------------------------------------------
-% MONTAGEM VETORIZADA ñ BOUNDARY EDGES
+% MONTAGEM VETORIZADA ‚Äì BOUNDARY EDGES
 % -------------------------------------------------------------------------
 % Dirichlet vs Neumann
 isDir = flagb < 200;
@@ -82,7 +82,7 @@ isNeu = ~isDir;
 % ---------------- Dirichlet ----------------
 % viscosidade efetiva (escalares)
 if isConc && is2phase
-    visD = sum(visonface_b(isDir,:),2);   % mÈdia simples (mantÈm lÛgica de uso escalar)
+    visD = sum(visonface_b(isDir,:),2);   % m√©dia simples (mant√©m l√≥gica de uso escalar)
 elseif isSat
     visD = visonface_b(isDir);
 else
@@ -104,12 +104,12 @@ KnD   = preMPFAD.Kn(isDir);
 HesqD = preMPFAD.Hesq(isDir);
 A_D   = -KnD ./ (HesqD .* sqrt(sum(v0D.^2,2)));
 
-% contribuiÁıes em M(lef,lef)
+% contribui√ß√µes em M(lef,lef)
 rowsM_D = lefD;
 colsM_D = lefD;
 valsM_D = -visD .* A_D .* sum(v0D.^2,2);
 
-% contribuiÁıes em I(lef)
+% contribui√ß√µes em I(lef)
 dot_v2v0 = sum(v2D .* (-v0D),2);
 dot_v1v0 = sum(v1D .*  v0D ,2);
 valsI_D  = -visD .* A_D .* (dot_v2v0 .* c1D + dot_v1v0 .* c2D) + ...
@@ -123,7 +123,7 @@ flagN = flagb(isNeu);
 valsI_N = zeros(nnz(isNeu),1);
 
 if auxnumcase==341 || auxnumcase==341.1
-    % ponto mÈdio da aresta
+    % ponto m√©dio da aresta
     a1 = 0.5*(coord(v1b(isNeu),:) + coord(v2b(isNeu),:));
     if auxnumcase==341
         auxk = arrayfun(@(x,y) ferncodes_K(x,y), a1(:,1), a1(:,2));
@@ -138,7 +138,7 @@ else
 end
 
 % -------------------------------------------------------------------------
-% MONTAGEM VETORIZADA ñ INTERNAL EDGES
+% MONTAGEM VETORIZADA ‚Äì INTERNAL EDGES
 % -------------------------------------------------------------------------
 % viscosidade efetiva interna
 if isConc && is2phase
@@ -151,42 +151,42 @@ end
 
 kI = visI .* preMPFAD.Kde;
 
-% M contribuiÁıes (4 por aresta)
+% M contribui√ß√µes (4 por aresta)
 rowsM_I = [eL; eL; eR; eR];
 colsM_I = [eL; eR; eR; eL];
 valsM_I = [-kI; +kI; -kI; +kI];
 
-% I contribuiÁıes por Dirichlet em vÈrtices
+% I contribui√ß√µes por Dirichlet em v√©rtices
 maskD1 = nflag(e1,1) < 200;
 maskD2 = nflag(e2,1) < 200;
 
 valsI_L = zeros(size(I));
 valsI_R = zeros(size(I));
 
-% vÈrtice 1
+% v√©rtice 1
 kD1 = kI(maskD1) .* Ded(maskD1) .* nflag(e1(maskD1),2);
 idxL1 = eL(maskD1);
 idxR1 = eR(maskD1);
 valsI_L = valsI_L+ accumarray(idxL1, -kD1, size(I));
 valsI_R = valsI_R + accumarray(idxR1, +kD1, size(I));
 
-% vÈrtice 2
+% v√©rtice 2
 kD2 = kI(maskD2) .* Ded(maskD2) .* nflag(e2(maskD2),2);
 idxL2 = eL(maskD2);
 idxR2 = eR(maskD2);
 valsI_L = valsI_L + accumarray(idxL2, +kD2, size(I));
 valsI_R = valsI_R + accumarray(idxR2, -kD2, size(I));
 
-% Neumann em vÈrtices (201/202)
+% Neumann em v√©rtices (201/202)
 maskN1 = (nflag(e1,1)==201 | nflag(e1,1)==202);
 maskN2 = (nflag(e2,1)==201 | nflag(e2,1)==202);
 %--------------------------------------------------------------------------
-% define quem È vÈrtice de contorno (ajuste o critÈrio aqui)
+% define quem √© v√©rtice de contorno (ajuste o crit√©rio aqui)
 isBCvertex = (nflag(:,1) == 201) | (nflag(:,1) == 202);
-% m·scara de faces internas que tÍm pelo menos um vÈrtice de contorno
+% m√°scara de faces internas que t√™m pelo menos um v√©rtice de contorno
 maskFaceHasBC = isBCvertex(e1);
 
-% Ìndices das faces internas que tocam o contorno
+% √≠ndices das faces internas que tocam o contorno
 idxFacesHasBC = find(maskFaceHasBC);
 if ~isempty(idxFacesHasBC)
     %--------------------------------------------------------------------------
@@ -198,7 +198,7 @@ if ~isempty(idxFacesHasBC)
 end
 maskFaceHasBC1 =  isBCvertex(e2);
 
-% Ìndices das faces internas que tocam o contorno
+% √≠ndices das faces internas que tocam o contorno
 idxFacesHasBC1 = find(maskFaceHasBC1);
 if ~isempty(idxFacesHasBC1)
     kN2     = kI(idxFacesHasBC1) .* Ded(idxFacesHasBC1) .* preMPFAD.s(e2(maskN2));
@@ -209,12 +209,12 @@ if ~isempty(idxFacesHasBC1)
 end
 
 % -------------------------------------------------------------------------
-% CONTRIBUI«’ES DOS N”S COM nflag > 200 (esurn1/esurn2), INCLUIDO NEUMANN
+% CONTRIBUI√á√ïES DOS N√ìS COM nflag > 200 (esurn1/esurn2), INCLUIDO NEUMANN
 % -------------------------------------------------------------------------
 maskInt1 = nflag(e1,1) > 200;
 maskInt2 = nflag(e2,1) > 200;
 
-% vÈrtice 1
+% v√©rtice 1
 edges1 = find(maskInt1);
 rows_add = [];
 cols_add = [];
@@ -250,7 +250,7 @@ for k = edges1.'
     vals_add = [vals_add; valL(:);    valR(:)];
 end
 
-% vÈrtice 2
+% v√©rtice 2
 edges2 = find(maskInt2);
 for k = edges2.'
     % n  = e2(k);
