@@ -35,14 +35,21 @@ preTPFA=[];
 % calculate the weight
 if ismember(env.config.pmethod, {'mpfad','nlfvpp','mpfaql'})
     %Call another parameters that I don't know.
-    [V,N,] = ferncodes_elementface(env);
+    [V,N,F] = ferncodes_elementface(env);
 
     % calculo dos pesos que correspondem ao LPEW2
-    
+    if ismember(env.config.pmethod, {'mpfad'})
+    %Get preprocessed terms:
+    [preMPFAD] =ferncodes_Kde_Ded_Kt_Kn(env, parmRichardEq,preMPFAD);
+    end
     %======================================================================
     preMPFAD.V=V;
     preMPFAD.N=N;
+    preMPFAD.F=F;
     [preMPFAD,weight,s] = ferncodes_Pre_LPEW_2_vect(preMPFAD,parmRichardEq,env);  
+
+    %[preMPFAD,weight,s] = ferncodes_Pre_LPEW_2(preMPFAD,parmRichardEq,env);  
+
 
     %======================================================================
     preNLTPFA.V=V;

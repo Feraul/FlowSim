@@ -23,56 +23,56 @@ end
 
 F=0;%zeros(size(elem,1),4);
 %--------------------------------------------------------------------------
-% calculate the faces in the neiboring of element  
-% for ii=1:size(elem,1)
-%     i=1;
-%     % decide whether the element is quadrangular or triangular
-%     list1=4*logical(elem(ii,4)~=0)+3*logical(elem(ii,4)==0);
-%     % alocate the vertex of element ii
-%     list=elem(ii,1:list1);
-% 
-%     for jj=1:length(list)
-%         if jj<length(list)
-%             %ibedge=find(((bedge(:,1)==list(jj+1) & bedge(:,2)==list(jj))|(bedge(:,1)==list(jj) & bedge(:,2)==list(jj+1))));
-%             b =logical(((bedge(:,1)==list(jj+1) & bedge(:,2)==list(jj))|(bedge(:,1)==list(jj) & bedge(:,2)==list(jj+1))));
-%             key=1:length(b);
-%             ibedge=key(b==1);
-%             if ibedge~=0
-%                 edgeflag=ibedge; % flag da face 
-% 
-%             else
-%                 %iedge=find((inedge(:,1)==list(jj+1) & inedge(:,2)==list(jj))|(inedge(:,1)==list(jj) & inedge(:,2)==list(jj+1)));
-%                 b=logical(((inedge(:,1)==list(jj+1) & inedge(:,2)==list(jj))|(inedge(:,1)==list(jj) & inedge(:,2)==list(jj+1))));
-%                 key=1:length(b);
-%                 iedge=key(b==1);
-%                 edgeflag=iedge+size(bedge,1);
-% 
-%             end
-% 
-%         else
-%             %ibedge=find(((bedge(:,1)==list(jj) & bedge(:,2)==list(1))|(bedge(:,1)==list(1) & bedge(:,2)==list(jj))));
-%             b=logical(((bedge(:,1)==list(jj) & bedge(:,2)==list(1))|(bedge(:,1)==list(1) & bedge(:,2)==list(jj))));
-%             key=1:length(b);
-%             ibedge=key(b==1);
-%             if ibedge~=0
-%                 edgeflag=ibedge;
-% 
-%             else
-%                 %iedge=find((inedge(:,1)==list(jj) & inedge(:,2)==list(1))|(inedge(:,1)==list(1) & inedge(:,2)==list(jj)));
-% 
-%                 b=logical((inedge(:,1)==list(jj) & inedge(:,2)==list(1))|(inedge(:,1)==list(1) & inedge(:,2)==list(jj)));
-%                 key=1:length(b);
-%                 iedge=key(b==1);
-%                 edgeflag=iedge+size(bedge,1);
-%             end
-% 
-%         end
-%         F(ii,i)=edgeflag;
-%         i=i+1;
-%     end
-% 
-% 
-% end
+%calculate the faces in the neiboring of element  
+for ii=1:size(elem,1)
+    i=1;
+    % decide whether the element is quadrangular or triangular
+    list1=4*logical(elem(ii,4)~=0)+3*logical(elem(ii,4)==0);
+    % alocate the vertex of element ii
+    list=elem(ii,1:list1);
+
+    for jj=1:length(list)
+        if jj<length(list)
+            %ibedge=find(((bedge(:,1)==list(jj+1) & bedge(:,2)==list(jj))|(bedge(:,1)==list(jj) & bedge(:,2)==list(jj+1))));
+            b =logical(((bedge(:,1)==list(jj+1) & bedge(:,2)==list(jj))|(bedge(:,1)==list(jj) & bedge(:,2)==list(jj+1))));
+            key=1:length(b);
+            ibedge=key(b==1);
+            if ibedge~=0
+                edgeflag=ibedge; % flag da face 
+
+            else
+                %iedge=find((inedge(:,1)==list(jj+1) & inedge(:,2)==list(jj))|(inedge(:,1)==list(jj) & inedge(:,2)==list(jj+1)));
+                b=logical(((inedge(:,1)==list(jj+1) & inedge(:,2)==list(jj))|(inedge(:,1)==list(jj) & inedge(:,2)==list(jj+1))));
+                key=1:length(b);
+                iedge=key(b==1);
+                edgeflag=iedge+size(bedge,1);
+
+            end
+
+        else
+            %ibedge=find(((bedge(:,1)==list(jj) & bedge(:,2)==list(1))|(bedge(:,1)==list(1) & bedge(:,2)==list(jj))));
+            b=logical(((bedge(:,1)==list(jj) & bedge(:,2)==list(1))|(bedge(:,1)==list(1) & bedge(:,2)==list(jj))));
+            key=1:length(b);
+            ibedge=key(b==1);
+            if ibedge~=0
+                edgeflag=ibedge;
+
+            else
+                %iedge=find((inedge(:,1)==list(jj) & inedge(:,2)==list(1))|(inedge(:,1)==list(1) & inedge(:,2)==list(jj)));
+
+                b=logical((inedge(:,1)==list(jj) & inedge(:,2)==list(1))|(inedge(:,1)==list(1) & inedge(:,2)==list(jj)));
+                key=1:length(b);
+                iedge=key(b==1);
+                edgeflag=iedge+size(bedge,1);
+            end
+
+        end
+        F(ii,i)=edgeflag;
+        i=i+1;
+    end
+
+
+end
 for No=1:size(coord,1)
     N_element_No=esurn2(No+1)-esurn2(No);
     

@@ -155,7 +155,7 @@ switch env.config.numcase
         %h_init(~mask) = 65;
         h_old(mask)   = -30;
         h_old(~mask)  = 20;
-        dt=0.003; 
+        dt=1.5e-1; 
 end
 parmRichardEq.theta_s=theta_s;
 parmRichardEq.theta_r=theta_r;

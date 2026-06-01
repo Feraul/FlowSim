@@ -1,7 +1,7 @@
 function [M,I]=soil_properties(M,I,parmRichardEq,preMPFAD,env)
 
 
-elemarea=env.geometry.elemarea;
+Area=env.geometry.elemarea;
 flowresultZ=preMPFAD.flowresultZ;
 
 h_n=parmRichardEq.h_init;
@@ -16,11 +16,10 @@ theta_m=thetafunction(h_m,parmRichardEq,env);
 % capacidade de solo para cada iteracao
 dthetadh=SWcapacity(h_m,parmRichardEq,env); 
 
-diff_theta=theta_m - theta_n;
+Dtheta=theta_m - theta_n;
 
-M=M+(dt^-1)*diag(dthetadh.*elemarea(:));
+M=M+(dt^-1)*diag(dthetadh.*Area(:));
 
-I=I+(dt^-1).*(diag(dthetadh.*elemarea(:))*h_m-diff_theta.*elemarea(:))...
-    -flowresultZ;
+I=I+(dt^-1).*(diag(dthetadh.*Area(:))*h_m-Dtheta.*Area(:))-flowresultZ;
 
 end

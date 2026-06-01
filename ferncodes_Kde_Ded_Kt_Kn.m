@@ -137,10 +137,10 @@ if 430<numcase && numcase<450 && numcase~=436
 
     %---------------------------------------------------------------------
     % condicao de contorno de Neumann
-    mask201 = bedge(:,5)==201;
+    mask201 = bedge(:,5)>200;
     if any(mask201)
-        if numcase==431 || numcase==432 || numcase==435 || numcase==438 %|| numcase==439
-            flowrateZ(mask201)=0;
+        if numcase==431 || numcase==432 || numcase==435 || numcase==438 % || numcase==439
+            flowrateZ(mask201)=flowrateZ(mask201,1);
         end
     end
 

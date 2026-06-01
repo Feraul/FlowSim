@@ -1,6 +1,6 @@
 %It is called by "ferncodes_solverpressure.m"
 
-function [preMPFAD,weight,s] = ferncodes_Pre_LPEW_2(Sw,preMPFAD,parmRichardEq,env)
+function [preMPFAD,weight,s] = ferncodes_Pre_LPEW_2(preMPFAD,parmRichardEq,env)
 
 auxnumcase=env.config.numcase;
 if auxnumcase>400
@@ -8,8 +8,9 @@ if auxnumcase>400
 else
     kmap=env.config.perm;
 end
+elem=env.geometry.elem;
 N=preMPFAD.N;
-nflag=preMPFAD.nflag;
+nflag=env.config.nflag;
 
 % Retorna todos os parâmetros necessários às expressões dos fluxos.
 apw = ones(size(env.geometry.coord,1),1);
@@ -25,7 +26,7 @@ for y = 1:size(env.geometry.coord,1),
     [neta] = netas_Interp_LPEW(O,P,T,Qo,No,env);
     
     % calculo dos Ks
-    [Kt1,Kt2,Kn1,Kn2] = ferncodes_Ks_Interp_LPEW2(O,T,Qo,No,Sw,env,kmap);
+    [Kt1,Kt2,Kn1,Kn2] = ferncodes_Ks_Interp_LPEW2(O,T,Qo,No,zeros(size(elem,1),1),env,kmap);
     
     % calculo dos lamdas
     [lambda,r] = Lamdas_Weights_LPEW2(Kt1,Kt2,Kn1,Kn2,theta1,theta2,ve1,...

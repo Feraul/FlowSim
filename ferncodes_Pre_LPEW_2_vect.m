@@ -3,6 +3,7 @@ auxnumcase = env.config.numcase;
 
 if auxnumcase > 400
     kmap = parmRichardEq.auxperm;
+    flowrateZ=preMPFAD.flowrateZ;
 else
     kmap = env.config.perm;
 end
@@ -201,12 +202,14 @@ for y = 1:nNodes
                 %r(No,1)=1+ (zetan/zetad);
                 % comentei porque ja coloquei a norma em Pre_LPEW2 linha 55
                 r(No,1)=(1+ (zetan/zetad))*norm(Qo-T(1,:));
+                normfaceaux1=norm(Qo-T(1,:));
             elseif (k==nec+1)&&(size(P,1)~=size(O,1))
                 zetan=Kn2(k-1)*cot(ve1(k-1))+Kt2(k-1);
                 zetad=Kn1(k-1,2)*cot(theta2(k-1))-Kt1(k-1,2);
                 %r(No,2)=1+(zetan/zetad);
                 % comentei porque ja coloquei a norma em Pre_LPEW2 linha 55
                 r(No,2)=(1+(zetan/zetad))*norm(Qo-T(nec+1,:));
+              normfaceaux2=norm(Qo-T(nec+1,:));
             else
                 zetan=Kn2(k-1)*cot(ve1(k-1))+Kn2(k)*cot(ve2(k))+Kt2(k-1)-Kt2(k);
                 zetad=Kn1(k-1,2)*cot(theta2(k-1))+Kn1(k,1)*cot(theta1(k)) ...
@@ -247,16 +250,16 @@ for y = 1:nNodes
     if env.config.numcase == 341
         % Vetores locais
         vetor = env.geometry.nsurn1(ns2(No)+1:ns2(No+1));
-        comp1 = N(No,1);
-        comp2 = N(No,length(vetor));
+        face1 = N(No,1);
+        face2 = N(No,length(vetor));
 
         % Verifica se o nó pertence ao contorno de Neumann
         if 200 < nflag(No,1) && nflag(No,1) < 300
             % Face comp1
-            if env.geometry.bedge(comp1,5) > 200
-                a = env.config.bcflag(:,1) == env.geometry.bedge(comp1,5);
+            if env.geometry.bedge(face1,5) > 200
+                a = env.config.bcflag(:,1) == env.geometry.bedge(face1,5);
                 s1 = find(a == 1);
-                aa = 0.5*(coord(env.geometry.bedge(comp1,1),:) + coord(env.geometry.bedge(comp1,2),:));
+                aa = 0.5*(coord(env.geometry.bedge(face1,1),:) + coord(env.geometry.bedge(face1,2),:));
                 auxkmap = ferncodes_K(aa(1), aa(2));
                 aux1 = r(No,1)*auxkmap(1)*nflagface(s1,2);
             else
@@ -264,10 +267,10 @@ for y = 1:nNodes
             end
 
             % Face comp2
-            if env.geometry.bedge(comp2,5) > 200
-                b = env.config.bcflag(:,1) == env.geometry.bedge(comp2,5);
+            if env.geometry.bedge(face2,5) > 200
+                b = env.config.bcflag(:,1) == env.geometry.bedge(face2,5);
                 s2 = find(b == 1);
-                aaa = 0.5*(coord(env.geometry.bedge(comp2,1),:) + coord(env.geometry.bedge(comp2,2),:));
+                aaa = 0.5*(coord(env.geometry.bedge(face2,1),:) + coord(env.geometry.bedge(face2,2),:));
                 auxkmap = ferncodes_K(aaa(1), aaa(2));
                 aux2 = r(No,2)*auxkmap(1)*nflagface(s2,2);
             else
@@ -279,18 +282,19 @@ for y = 1:nNodes
     else
         % Caso numcase ≠ 341
         vetor = env.geometry.nsurn1(ns2(No)+1:ns2(No+1));
-        comp1 = N(No,1);
-        comp2 = N(No,length(vetor));
+        face1 = N(No,1);
+        face2 = N(No,length(vetor));
         MM = env.geometry.bedge(:,1) == No;
         MMM = find(MM==1);
 
-        if comp1 <= size(env.geometry.bedge,1) && comp2 <= size(env.geometry.bedge,1) && 200 < env.geometry.bedge(MMM,4)
-            a = env.config.bcflag(:,1) == env.geometry.bedge(comp1,5);
+        if face1 <= size(env.geometry.bedge,1) && face2 <= size(env.geometry.bedge,1) && 200 < env.geometry.bedge(MMM,4)
+            a = env.config.bcflag(:,1) == env.geometry.bedge(face1,5);
             s1 = find(a == 1);
-            flux1=env.config.bcflag(s1,2);
-            b = env.config.bcflag(:,1) == env.geometry.bedge(comp2,5);
+
+            flux1=env.config.bcflag(s1,2);%+flowrateZ(face1,1)/normfaceaux2;
+            b = env.config.bcflag(:,1) == env.geometry.bedge(face2,5);
             s2 = find(b == 1);
-            flux2=env.config.bcflag(s2,2);
+            flux2=env.config.bcflag(s2,2);%+flowrateZ(face2,1)/normfaceaux2;
 
             s(No,1) = -(1/sum(lambda))*(r(No,1)*flux1 + r(No,2)*flux2);
         end

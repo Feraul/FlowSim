@@ -15,6 +15,7 @@ auxnormals=env.geometry.normals;
 auxmodflowcompared=env.config.modflowcase;
 nflag=env.config.nflag;
 Ded=preMPFAD.Ded;
+flowrateZ=preMPFAD.flowrateZ;
 
 % incializacao de parametros locais
 Kt=preMPFAD.Kt;
@@ -134,7 +135,8 @@ if auxnumcase==341 || auxnumcase==341.1
 else
     % mapeia flagN em bcflag(:,1)
     [~,loc] = ismember(flagN, auxbcflag(:,1));
-    valsI_N = norN .* auxbcflag(loc,2);
+    mask222=bedge(:,5)>200;
+    valsI_N = norN .* auxbcflag(loc,2)+flowrateZ(find(mask222==1),1);%+(~mask222).*flowrateZ(1:length(flagN),1);
 end
 
 % -------------------------------------------------------------------------

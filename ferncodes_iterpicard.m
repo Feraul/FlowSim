@@ -6,10 +6,11 @@ function [p,flowrate,flowresult,flowratedif,faceaux,parmRichardEq,preMPFAD]=...
 nltol=env.config.nltol;
 maxiter=env.config.maxiter;
 pmethod=env.config.pmethod;
+numcase=env.config.numcase;
 h_kickoff=parmRichardEq.h_old;
 %% calculo do residuo Inicial
 R0=norm(M_old*h_kickoff-RHS_old);
-
+p_old=h_kickoff;
 %% inicializando dados para iteração Picard
 step=0;
 er=1;
@@ -19,10 +20,12 @@ while (nltol<er || nltol==er) && (step<maxiter)
 
     % --- bloco de estabilização L-scheme ---
    n = size(M_old,1);
-   M_L   = M_old + 0.01 * speye(n);     % M^{(k)} + L I
-   RHS_L = RHS_old + 0.01 * parmRichardEq.h_old;      % RHS^{(k)} + L h^{(k)}
+   M_L   = M_old;%+ 0.1 * speye(n);     % M^{(k)} + L I
+   RHS_L = RHS_old;% + 0.1 * parmRichardEq.h_old;      % RHS^{(k)} + L h^{(k)}
 
     p_new = solver(M_L,RHS_L);
+    p_new= p_old+0.5*(p_new -p_old);
+
     parmRichardEq.h_old=p_new;
 
     if strcmp(pmethod,'mpfad')
@@ -41,6 +44,7 @@ while (nltol<er || nltol==er) && (step<maxiter)
         %         dt=1.3*dt;
         %     end
         % end
+       
         %==================================================================
         % Montagem da matriz global
         [M,I,] = ferncodes_globalmatrix(env,preMPFAD,parmRichardEq);
@@ -83,6 +87,7 @@ while (nltol<er || nltol==er) && (step<maxiter)
     % atualizar
     M_old=M_new;
     RHS_old=RHS_new;
+    p_old=p_new;
 end
 
 %--------------------------------------------------------------------------

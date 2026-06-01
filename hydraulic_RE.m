@@ -10,7 +10,7 @@ centelem=env.geometry.centelem;numcase=env.config.numcase;elem=env.geometry.elem
 inedge=env.geometry.inedge;bedge=env.geometry.bedge;dt= parmRichardEq.dt;
 alpha=parmRichardEq.alpha;nvg=parmRichardEq.nvg;normals=env.geometry.normals;
 coord=env.geometry.coord;finaltime=env.config.totaltime;elemarea=env.geometry.elemarea;
-
+F=preMPFAD.F;
 % determina a altura 75 onde esta localizado a face
 afaceaux=find(abs(env.geometry.coord(env.geometry.inedge(:,1),2)-60)<1e-9);
 facestop=afaceaux+size(env.geometry.bedge,1);
@@ -91,6 +91,13 @@ kmap_storage   = env.config.perm(:,2);
 sum2           = 0;
 sum1           = 0;
 vnsum          =0;
+
+figure(1); clf;
+hold on;
+hplot = plot(NaN, NaN, 'o');   % marcador vazio
+xlabel('tempo');
+ylabel('flowrate(4584)');
+
 tic
 %% ================== Loop temporal principal ==================
 while stopcriteria < 100
@@ -403,15 +410,33 @@ while stopcriteria < 100
     elseif numcase==439
         p_oldaux1 = (h <0);
         p_oldaux2 = (h >= 0);
-        p_old     = 20*p_oldaux2 - 20*p_oldaux1;
+        p_old     = 20*p_oldaux2 - 30*p_oldaux1;
         parmRichardEq.h_old=p_old;
         parmRichardEq.h_init=h;
         flowresultZ=preMPFAD.flowresultZ;
          %------------------------------------------------------------------
          h1=(h-(200-centelem(:,2)));
-        postprocessor(h,0*h,0*flowresultZ,time_storage,env,count,...
+        postprocessor(h,h1,0*flowresultZ,time_storage,env,count,...
             parmRichardEq);
+       %-------------------------------------------------------------------
+       mmmm=bedge(:,5)==202;
 
+       facescontor=find(mmmm==1);
+
+       elementosedge=bedge(facescontor,3);
+
+       faceselem=F(elementosedge,:);
+       
+       mask1=faceselem<size(bedge,1);
+       
+       sss=max(abs(flowrate(faceselem(~mask1))));
+
+        %env.config.bcflag(3,2)=min(14.8, sss);
+        %------------------------------------------------------------------
+        
+        set(hplot, 'XData', [get(hplot,'XData') time], ...
+           'YData', [get(hplot,'YData') sss]);
+        drawnow;
     end
 
     %% --------- Atualizações específicas para MPFA-D ---------------------
@@ -439,9 +464,7 @@ while stopcriteria < 100
         ylabel('hidraulic conductivity')
     end
 
-    if stopcriteria < 100
-        faceaux(:,1) = 0;
-    end
+    faceaux(:,1) = faceaux(:,1) .* (stopcriteria >= 100);
 
 end  % while
 if numcase==436
@@ -567,6 +590,75 @@ elseif numcase==431
     % xlabel('Time step (min)')
     % ylabel('Massa Balance Error')
     % grid
+elseif numcase==439
+inedge=env.geometry.inedge;
+
+Lef = inedge(:,3);
+Rel = inedge(:,4);
+
+% faces onde há mudança de sinal
+mask = h(Lef).*h(Rel) < 0;
+
+% elementos candidatos
+Lef_neg = h(Lef) > 0;
+
+% vetor final de elementos
+elemento = Lef;
+elemento(~Lef_neg) = Rel(~Lef_neg);
+
+% aplicar a máscara
+elemento = elemento(mask);
+
+centros=centelem(elemento,:);
+A = sortrows(centros,1);
+ % remover duplicados em x
+[xu, ia] = unique(A(:,1));
+zu = A(ia,2);
+
+% interpolação
+xq = linspace(min(xu), max(xu), 500);
+yq = interp1(xu, zu, xq, 'spline');
+
+% plot
+plot(A(:,1),A(:,2),'o')
+hold on
+plot(xq,yq,'r','LineWidth',2)
+grid on
+legend('Datos','Curva interpolada')
+figure(2)
+
+        %t=2
+    B=[0.00000	78.7
+5.45455	78.5
+14.1176	78.3307
+20.2139	78.3307
+27.9144	78.0096
+34.0107	77.6886
+39.7861	77.0465
+49.7326	76.0835
+60.0000	75.4414
+65.7754	74.7994
+73.7968	74.1573
+81.4973	73.1942
+88.2353	72.5522
+95.9358	71.9101
+104.920	70.9470
+114.545	69.6629
+123.529	68.3788
+133.155	67.4157
+144.706	66.7737
+159.465	66.4527
+174.866	65.8106
+199.251	65.0
+222.674	65.0
+247.059	65.0
+300.321	65.0
+];
+
+    plot(A(:,1), A(:,2),'k')
+    hold on
+    plot(B(:,1),B(:,2),'b')
+
 end
 toc
 % plotagem dos graficos em determinados regioes do dominio
