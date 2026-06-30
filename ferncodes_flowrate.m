@@ -1,5 +1,5 @@
 function [flowrate,flowresult,flowratedif,faceaux] = ...
-ferncodes_flowrate(p,pinterp,preMPFAD,parmRichardEq,env)
+ferncodes_flowrate(p,pinterp,premethod,parmRichardEq,env)
 
 coord=env.geometry.coord;
 bedge=env.geometry.bedge;
@@ -8,16 +8,16 @@ centelem=env.geometry.centelem;
 bcflag=env.config.bcflag;
 numcase=env.config.numcase;
 viscosity=env.config.visc;
-flowrateZ=preMPFAD.flowrateZ;
-kmap=parmRichardEq;
+flowrateZ=premethod.MPFAD.flowrateZ;
+
 
 
 %--------------------------------------------------------------------------
-Kde=preMPFAD.Kde;
-Ded=preMPFAD.Ded;
-Kn=preMPFAD.Kn;
-Kt=preMPFAD.Kt;
-Hesq=preMPFAD.Hesq;
+Kde=premethod.MPFAD.Kde;
+Ded=premethod.MPFAD.Ded;
+Kn=premethod.MPFAD.Kn;
+Kt=premethod.MPFAD.Kt;
+Hesq=premethod.MPFAD.Hesq;
 nflag=env.config.nflag;
 
 bedgesize = size(bedge,1);

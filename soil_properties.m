@@ -1,8 +1,7 @@
-function [M,I]=soil_properties(M,I,parmRichardEq,preMPFAD,env)
+function [M,I]=soil_properties(M,I,parmRichardEq,flowresultZ,env)
 
 
 Area=env.geometry.elemarea;
-flowresultZ=preMPFAD.flowresultZ;
 
 h_n=parmRichardEq.h_init;
 h_m=parmRichardEq.h_old;

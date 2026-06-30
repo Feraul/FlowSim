@@ -11,9 +11,7 @@
 
 %--------------------------------------------------------------------------
 
-function [env,preTPFA,preMPFAD,preMPFAQL,preNLTPFA, preMPFAH, preconcentraMPFAD,...
-    preconcentraNLTPFA, preGravity,parmRichardEq] = preMPFA(env,parmgroundwater,...
-    parmRichardEq)
+function [env,premethod,preGravity,parmRichardEq] = preprocessmethod(env,parmRichardEq)
 
 %Obtain the coordinate of both CENTER and AUXILARY nodes of elements which
 %constitute the mash. The AREA of each element is also calculated.
@@ -30,37 +28,41 @@ preconcentraMPFAD=[];
 preconcentraNLTPFA=[];
 preGravity=[];
 preTPFA=[];
+premethod = struct();
 %==========================================================================
 
 % calculate the weight
 if ismember(env.config.pmethod, {'mpfad','nlfvpp','mpfaql'})
     %Call another parameters that I don't know.
     [V,N,F] = ferncodes_elementface(env);
-
+    premethod.MPFAD.V=V;
+    premethod.MPFAD.N=N;
+    premethod.MPFAD.F=F;
     % calculo dos pesos que correspondem ao LPEW2
     if ismember(env.config.pmethod, {'mpfad'})
     %Get preprocessed terms:
-    [preMPFAD] =ferncodes_Kde_Ded_Kt_Kn(env, parmRichardEq,preMPFAD);
+    [premethod] =ferncodes_Kde_Ded_Kt_Kn(env, parmRichardEq,premethod);
     end
     %======================================================================
-    preMPFAD.V=V;
-    preMPFAD.N=N;
-    preMPFAD.F=F;
-    [preMPFAD,weight,s] = ferncodes_Pre_LPEW_2_vect(preMPFAD,parmRichardEq,env);  
+    
+    [premethod,weight,s] = ferncodes_Pre_LPEW_2_vect(premethod,parmRichardEq,env);  
 
     %[preMPFAD,weight,s] = ferncodes_Pre_LPEW_2(preMPFAD,parmRichardEq,env);  
 
-
     %======================================================================
-    preNLTPFA.V=V;
-    preNLTPFA.N=N;
-    preNLTPFA.weight=weight;
-    preNLTPFA.s=s;
+    if ismember(env.config.pmethod, {'nlfvpp'})
+    premethod.NLTPFA.V=V;
+    premethod.NLTPFA.N=N;
+    premethod.NLTPFA.weight=weight;
+    premethod.NLTPFA.s=s;
+    end
     %======================================================================
-    preMPFAQL.V=V;
-    preMPFAQL.N=N;
-    preMPFAQL.weight=weight;
-    preMPFAQL.s=s;
+    if ismember(env.config.pmethod, {'mpfaql'})
+    premethod.MPFAQL.V=V;
+    premethod.MPFAQL.N=N;
+    premethod.MPFAQL.weight=weight;
+    premethod.MPFAQL.s=s;
+    end
 end
 % Physical and geometric parameters in relation to methods based on harmonic points
 if strcmp(env.config.pmethod,'mpfah')
@@ -108,12 +110,12 @@ switch char(env.config.pmethod)
     case 'tpfa'
         %[transmvecleft,knownvecleft,Fg,bodyterm] = transmTPFA(kmap,0);
         %Get preprocessed terms:
-        [preTPFA] =ferncodes_Kde_Ded_Kt_Kn(env, parmRichardEq,preTPFA);
+        [premethod] =ferncodes_Kde_Ded_Kt_Kn_TPFA(env, parmRichardEq,premethod);
 
     case 'mpfad' %(Gao and Wu, 2010)
         
         %Get preprocessed terms:
-        [preMPFAD] =ferncodes_Kde_Ded_Kt_Kn(env, parmRichardEq,preMPFAD);
+        %[preMPFAD] =ferncodes_Kde_Ded_Kt_Kn(env, parmRichardEq,preMPFAD);
        
         %[flowrateZ,flowresultZ]=Zcontribution(kmap);
         % for the concentration transport with pressure
@@ -126,19 +128,19 @@ switch char(env.config.pmethod)
                 parametersauxiliary(dmap,N);
             % flags boundary conditions
             [nflagnoc,nflagfacec] = ferncodes_calflag_con(lastimeval);
-        preconcentraMPFAD.Con=Con;
-        preconcentraMPFAD.lastimelevel=lastimelevel;
-        preconcentraMPFAD.lastimeval=lastimeval;
-        preconcentraMPFAD.Kdec=Kdec;
-        preconcentraMPFAD.Knc=Knc;
-        preconcentraMPFAD.Ktc=Ktc;
-        preconcentraMPFAD.Dedc=Dedc;
-        preconcentraMPFAD.wightc=wightc;
-         preconcentraMPFAD.sc=sc;
-        preconcentraMPFAD.weightDMPc=weightDMPc;
-        preconcentraMPFAD.dparameter=dparameter;
-        preconcentraMPFAD.nflagnoc=nflagnoc;
-        preconcentraMPFAD.nflagfacec=nflagfacec;
+            premethod.conMPFAD.Con=Con;
+            premethod.conMPFAD.lastimelevel=lastimelevel;
+            premethod.conMPFAD.lastimeval=lastimeval;
+            premethod.conMPFAD.Kdec=Kdec;
+            premethod.conMPFAD.Knc=Knc;
+            premethod.conMPFAD.Ktc=Ktc;
+            premethod.conMPFAD.Dedc=Dedc;
+            premethod.conMPFAD.wightc=wightc;
+            premethod.conMPFAD.sc=sc;
+            premethod.conMPFAD.weightDMPc=weightDMPc;
+            premethod.conMPFAD.dparameter=dparameter;
+            premethod.conMPFAD.nflagnoc=nflagnoc;
+            premethod.conMPFAD.nflagfacec=nflagfacec;
         end
         
         
@@ -183,7 +185,6 @@ switch char(env.config.pmethod)
         preconcentraNLTPFA.nflagfacec=nflagfacec;
         % contreras et al, 2016
 end  %End of SWITCH
-
 %Message to user:
 disp('>> "preMPFA" was finished with success!');
 

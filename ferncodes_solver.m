@@ -1,8 +1,8 @@
 %--------------------------------------------------------------------------
 %Subject: numerical routine to solve flux flow in poorus media
 %Modified: Fernando Contreras, 2021
-function [p,flowrate,flowresult,flowratedif,faceaux,parmRichardEq,preMPFAD] = ...
-    ferncodes_solverpressure(env,preMPFAD,parmRichardEq,dt,source_wells,tempo)
+function [p,flowrate,flowresult,flowratedif,faceaux,parmRichardEq,premethod] = ...
+    ferncodes_solver(env,premethod,parmRichardEq,dt,source_wells,tempo)
 
 auxnumcase=env.config.numcase;
 auxacel=env.config.acel;
@@ -11,7 +11,11 @@ auxacel=env.config.acel;
 if auxnumcase==331 || (400<auxnumcase && auxnumcase<500)
     %----------------------------------------------------------------------
     % Montagem da matriz global
-    [M_old,I_old,] = ferncodes_globalmatrix(env,preMPFAD,parmRichardEq);
+    if strcmp(env.config.pmethod,'tpfa')
+       [M_old,I_old,]=ferncodes_globalmatrix_TPFA(env,premethod,parmRichardEq);
+    else
+       [M_old,I_old,] = ferncodes_globalmatrix_MPFAD(env,premethod,parmRichardEq);
+    end
     %----------------------------------------------------------------------
     %Add a source therm to independent vector "mvector"
 
@@ -23,8 +27,8 @@ if auxnumcase==331 || (400<auxnumcase && auxnumcase<500)
     %----------------------------------------------------------------------
     % metodo de Picard
     if strcmp(auxacel,'FPI')
-        [p,flowrate,flowresult,flowratedif,faceaux,parmRichardEq,preMPFAD]=...
-       ferncodes_iterpicard(M_old,I_old,preMPFAD,parmRichardEq,env,...
+        [p,flowrate,flowresult,flowratedif,faceaux,parmRichardEq,premethod]=...
+       ferncodes_iterpicard(M_old,I_old,premethod,parmRichardEq,env,...
        tempo,dt,source_wells);
         % metodo de Picard com acelaracao de Anderson
     elseif strcmp(auxacel,'AA')

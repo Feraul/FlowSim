@@ -33,7 +33,7 @@ C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409
 //***OBS.: If you set "0", the folder "Results" and other will be 
 //created into folder set above:
 
-teste_60graus
+teste_semvalor
 
 //--------------------------------------------------------------------
 //------------------------ Solver Properties -------------------------
@@ -99,14 +99,12 @@ n
 //[fps] ==> "Multi-Point Flux Approximation" (type FPS); 
 //[mpfae] ==> "Multi-Point Flux Approximation" (type Enriched); 
 //[mpfad] ==> "Multi-Point Flux Approximation" (type Diamond); 
-//[nlfv] ==> "Non-Linear Finite Volume" (only for triangluar mesh); 
-//[gmnl] ==> "General Meshes Non-Linear Finite Volume". 
 //[mpfaql]==> "Multi-Point Flux Approximation" MPFA-QL
 //[mpfah]==> "Multi-Point Flux Approximation" MPFA-H
 //[nlfvpp]==> "Non-Linear Finite Volume" using lpew
 //[nlfvh]==> "Non-Linear Finite Volume" using harmonic point
 
-mpfad
+tpfa
 
 //If you chose [fps] or [mpfae], write below the auxiliary control
 //volume factor. It defines the auxiliary control volume size.
@@ -337,7 +335,7 @@ C:\Users\flc59\Documents\Malhas2
 //Write below the name of the mesh file. Use the extension *.msh: 
 //HermelineMeshModQuad_12_12, edwards_8_8
 
-mesh_clement_quad.msh
+mesh_clement_quad_distorcido.msh
 
 //--------------------------------------------------------------------
 //----------------------- Physical Parameters ------------------------
@@ -434,7 +432,7 @@ s
 //state simulation (parameter of stop). Write below the amount of 
 //days or the PVI's value instead:
 
-2
+8
 
 //--------------------------------------------------------------------
 //------------------------ Boundary Condition ------------------------

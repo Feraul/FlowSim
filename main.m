@@ -29,16 +29,12 @@ format short;
 %% pre-processador
 tic
 env = preprocessormod(1);
-parameters = initParams();
+% inicializando
 parmconcentra = [];
 parmgroundwater = [];
 parmRichardEq = [];
-%% define os pocos e fonte ou sumidoro para cada caso
-
+source_wells =[];
 %% Inicializações seguras
-
-bedgesize  = size(env.geometry.bedge,1);
-inedgesize = size(env.geometry.inedge,1);
 
 kmapaux = env.config.perm(1,1);
 env.config.perm=[1 kmapaux 0  0 kmapaux];
@@ -63,9 +59,9 @@ if 200 < env.config.numcase && env.config.numcase < 300
 % ============================================================
 % CASOS 300–350 → Hidráulica
 % ============================================================
-elseif 300 < env.config.numcase && env.config.numcase < 350
+elseif 300 < env.config.numcase && env.config.numcase < 400
     source_wells= defineWells(env,parmRichardEq);
-    [parmgroundwater, source_wells] = prehydraulic;
+    [parmgroundwater, source_wells] = prehydraulic(env);
 
     if ismember(env.config.numcase, [341 380.1 341.1])
         Nmod = 100;
@@ -83,7 +79,7 @@ elseif 400 < env.config.numcase && env.config.numcase < 500
     source_wells= defineWells(env,parmRichardEq);
 
 end
-
+% PARA CADA BENCHAMARK MODIFICAR !!!
 % ============================================================
 % Define the norm of permeability or conductivity hidraulic 
 % tensor ("normk")

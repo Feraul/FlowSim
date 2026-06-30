@@ -1,78 +1,130 @@
-function [flowrate, flowresult,flowratedif]=ferncodes_flowrateTPFA(p,Kde,Kn,Hesq,nflag,viscosity,Kdec,Knc,nflagc,Con)
+function [flowrate,flowresult,flowratedif,faceaux]=ferncodes_flowrateTPFA(p,premethod,parmRichardEq,env)
 
-global coord bedge inedge bcflag bcflagc centelem numcase
+coord=env.geometry.coord;
+bedge=env.geometry.bedge;
+inedge=env.geometry.inedge;
+centelem=env.geometry.centelem;
+bcflag=env.config.bcflag;
+numcase=env.config.numcase;
+viscosity=env.config.visc;
+flowrateZ=premethod.TPFA.flowrateZ;
+kmap=parmRichardEq;
 
-%Initialize "bedgesize" and "inedgesize"
+
+%--------------------------------------------------------------------------
+Kde=premethod.TPFA.Kde;
+Kn=premethod.TPFA.Kn;
+Hesq=premethod.TPFA.Hesq;
+nflag=env.config.nflag;
+
 bedgesize = size(bedge,1);
 inedgesize = size(inedge,1);
-%Initialize "bedgeamount"
-bedgeamount = 1:bedgesize;
 
-%Initialize "flowrate" and "flowresult"
-flowrate = zeros(bedgesize + inedgesize,1);
+flowrate    = zeros(bedgesize+inedgesize,1);
+flowratedif = zeros(bedgesize+inedgesize,1);
+
 flowresult = zeros(size(centelem,1),1);
-flowratedif=0;
-for ifacont=1:size(bedge,1);
-    lef=bedge(ifacont,3);
-    if numcase == 246 || numcase == 245 || numcase==247 || numcase==248 || numcase==249
-        % vicosity on the boundary edge
-        visonface = viscosity(ifacont,:);
-        %It is a Two-phase flow
-    else
-        visonface = 1;
-    end  %End of IF
-    nor=norm(coord(bedge(ifacont,1),:)-coord(bedge(ifacont,2),:));
-    % calculo das constantes nas faces internas
-    A=-Kn(ifacont)/(Hesq(ifacont)*nor);
-    if bedge(ifacont,5)<200 % se os nós esteverem na fronteira de DIRICHLET
-        c1=nflag(bedge(ifacont,1),2);
-        c2=nflag(bedge(ifacont,2),2);
-        
-        flowrate(ifacont)=visonface*A*(nor^2)*(c1-p(lef));
-    else
-        x=bcflag(:,1)==bedge(ifacont,5);
-        r=find(x==1);
-        flowrate(ifacont)= nor*bcflag(r,2);
-    end
-    %Attribute the flow rate to "flowresult"
-    %On the left:
-    flowresult(lef) = flowresult(lef) + flowrate(ifacont);
-    if 200<numcase && numcase<300
-        %% ====================================================================
-        if bedge(ifacont,7)<200 % se os nós esteverem na fronteira de DIRICHLET
-            c1aux=nflagc(bedge(ifacont,1),2);
-            Ac=-Knc(ifacont)/(Hesq(ifacont)*nor);
-            flowratedif(ifacont)=Ac*(nor^2)*(c1aux-Con(lef));
-        else
-            x=bcflagc(:,1)==bedge(ifacont,7);
-            r=find(x==1);
-            flowratedif(ifacont)= nor*bcflagc(r,2);
-        end
+
+%% ==================================================
+%% BOUNDARY EDGES  (VETORIZADO)
+%% ==================================================
+
+B1 = bedge(:,1);
+B2 = bedge(:,2);
+lef = bedge(:,3);
+
+coordB1 = coord(B1,:);
+coordB2 = coord(B2,:);
+
+edgevec = coordB1 - coordB2;
+nor = sqrt(sum(edgevec.^2,2));
+
+O = centelem(lef,:);
+
+dirmask = bedge(:,5) < 200;
+neumask = ~dirmask;
+
+c1 = nflag(B1,2);
+c2 = nflag(B2,2);
+
+A = Kn ./ (Hesq .* nor);
+
+term1 = sum((O-coordB2).*(coordB1-coordB2),2).*c1;
+term2 = sum((O-coordB1).*(coordB2-coordB1),2).*c2;
+
+flowrate_b = -A.*(term1+term2-(nor.^2).*p(lef));
+
+%% viscosity
+visonface = ones(bedgesize,1);
+
+if 30<numcase && numcase<200
+    visonface = sum(viscosity(1:bedgesize,:),2);
+elseif 200<numcase && numcase<300
+    if any(numcase == [246 245 247 248 249 251])
+        visonface = viscosity(1:bedgesize,:);
     end
 end
 
-for iface=1:size(inedge,1)
-    lef=inedge(iface,3); %indice do elemento a direita da aresta i
-    rel=inedge(iface,4); %indice do elemento a esquerda da aresta i
-    if numcase == 246 || numcase == 245 || numcase==247 || numcase==248 || numcase==249
-        % vicosity on the boundary edge
-        visonface = viscosity(bedgesize + iface,:);
-        %It is a Two-phase flow
-    else
-        visonface = 1;
-    end  %End of IF
-    %-------------------- calculo das vazões e velocidades ---------------%
-    
-    flowrate(iface+size(bedge,1))=visonface*Kde(iface)*(p(rel)-p(lef));
-    %Attribute the flow rate to "flowresult"
-    %On the left:
-    flowresult(lef) = flowresult(lef) + flowrate(bedgesize + iface);
-    %On the right:
-    flowresult(rel) = flowresult(rel) - flowrate(bedgesize + iface);
-    if 200<numcase && numcase<300
-        %% ====================================================================
-        flowratedif(iface+size(bedge,1))=Kdec(iface)*(Con(rel)-Con(lef));
+flowrate_b = visonface .* flowrate_b;
+
+%% Neumann boundary
+if any(neumask)
+    bcvals = zeros(bedgesize,1);
+    [~,loc]=ismember(bedge(neumask,5),bcflag(:,1));
+    bcvals(neumask)=bcflag(loc,2);
+    mask222=bedge(:,5)>200;
+    flowrate_b(neumask) = -nor(neumask).*bcvals(neumask)+flowrateZ(find(mask222==1),1);
+end
+
+flowrate(1:bedgesize)=flowrate_b;
+
+%% ==================================================
+%% INTERNAL EDGES  (VETORIZADO)
+%% ==================================================
+
+lef = inedge(:,3);
+rel = inedge(:,4);
+
+
+visonface_i = ones(inedgesize,1);
+
+if 30<numcase && numcase<200
+    visonface_i = sum(viscosity(bedgesize+1:bedgesize+inedgesize,:),2);
+elseif 200<numcase && numcase<300
+    if any(numcase == [246 245 247 248 249 251])
+        visonface_i = viscosity(bedgesize+1:bedgesize+inedgesize,:);
     end
 end
+
+flowrate(bedgesize+1:end,1) = visonface_i .* Kde .* (p(rel)-p(lef));
+
+if numcase==435 || numcase==431 || numcase==437 || numcase==439
+    flowrate = flowrate - flowrateZ;
+end
+
+%% ==================================================
+%% FLOWRESULT (ACCUMARRAY)
+%% ==================================================
+idx = bedgesize + (1:inedgesize);
+auxlef=bedge(:,3);
+
+flowresult = flowresult + accumarray(auxlef,flowrate(1:bedgesize),size(flowresult));
+
+
+flowresult = flowresult + accumarray(lef,flowrate(idx),size(flowresult))- ...
+            accumarray(rel,flowrate(idx),size(flowresult));
+
+%% ==================================================
+%% DISPERSIVE FLOW
+%% ==================================================
+
+if (200<numcase && numcase<300) || (379<numcase && numcase<400)
+
+    flowratedif(bedgesize+1:end) = ...
+        Kdec .* (Con(rel)-Con(lef));
+
+end
+
+faceaux=0;
 
 end

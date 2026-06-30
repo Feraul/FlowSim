@@ -474,8 +474,9 @@ while stopcriteria < 100
     else % TPFA
         [env,parmRichardEq] = PLUG_kfunction(env, parmRichardEq, time);
 
-        [premethod] = ferncodes_Kde_Ded_Kt_Kn_TPFA(env,parmRichardEq,premethod);
+        [premethod] = ferncodes_Kde_Ded_Kt_Kn(env,parmRichardEq,premethod);
 
+        [premethod,~,~] = ferncodes_Pre_LPEW_2_vect(premethod,parmRichardEq,env);
         if numcase==436
             [env] = ferncodes_calflag(env,parmRichardEq,time);
         end

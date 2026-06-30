@@ -7,15 +7,15 @@
 %Additional comments:
 %--------------------------------------------------------------------------
 
-function setmethod(source_wells,keywrite,invh,env,parmconcentra, parmgroundwater, parmRichardEq)
+function setmethod(source_wells,keywrite,invh,env,parmconcentra,...
+                   parmgroundwater, parmRichardEq)
 
 %Get a preprocessment of pressure scheme (used in One-phase and Two-Phase).
 if env.config.phasekey ~= 0
     %Call "preMPFA". This function calculate some important parameters to
     %be used in any PRESSURE solver.
-    [env,preTPFA,preMPFAD,preMPFAQL,preNLTPFA, preMPFAH, preconcentraMPFAD,...
-        preconcentraNLTPFA, preGravity,parmRichardEq] = preMPFA(env,parmgroundwater,...
-        parmRichardEq);
+    [env,premethod, preGravity,parmRichardEq] = ...
+        preprocessmethod(env,parmRichardEq);
 
 end  %End of IF (execute "preMPFA")
 env.config.phasekey = env.config.phasekey;
@@ -102,11 +102,9 @@ switch env.config.phasekey
         IMHEC(wells,keywrite,invh,env,parmconcentra,env,preTPFA,preMPFAD,...
             preMPFAQL,preNLTPFA, preMPFAH,presturation,parmRichardEq);
     case 6
-        % steady-state problem
-
         %% ===============================================================
         % transient-state problem
-        hydraulic_RE(env,preTPFA,preMPFAD,preMPFAH,parmRichardEq,source_wells);
+        hydraulic_RE(env,premethod,parmRichardEq,source_wells);
 end  %End of SWITCH
 end
 

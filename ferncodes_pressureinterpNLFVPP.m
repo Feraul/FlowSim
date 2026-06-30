@@ -1,12 +1,12 @@
-function [pressurinterp,cinterp]=ferncodes_pressureinterpNLFVPP(p,preMPFAD,env)
+function [pressurinterp,cinterp]=ferncodes_pressureinterpNLFVPP(p,premethod,env)
 
 
 coord=env.geometry.coord;
 esurn1=env.geometry.esurn1;
 esurn2=env.geometry.esurn2;
 numcase=env.config.numcase;
-w=preMPFAD.weight;
-s=preMPFAD.s;
+w=premethod.MPFAD.weight;
+s=premethod.MPFAD.s;
 nflag=env.config.nflag;
 
 nno = size(coord,1);

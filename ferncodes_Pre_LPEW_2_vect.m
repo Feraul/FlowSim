@@ -1,9 +1,8 @@
-function [preMPFAD,weight,s] = ferncodes_Pre_LPEW_2_vect(preMPFAD,parmRichardEq,env)
+function [premethod,weight,s] = ferncodes_Pre_LPEW_2_vect(premethod,parmRichardEq,env)
 auxnumcase = env.config.numcase;
 
 if auxnumcase > 400
     kmap = parmRichardEq.auxperm;
-    flowrateZ=preMPFAD.flowrateZ;
 else
     kmap = env.config.perm;
 end
@@ -16,7 +15,7 @@ ns2 = env.geometry.nsurn2;
 
 es1 = env.geometry.esurn1;
 es2 = env.geometry.esurn2;
-N=preMPFAD.N;
+N=premethod.MPFAD.N;
 
 nNodes = size(coord,1);
 
@@ -291,10 +290,10 @@ for y = 1:nNodes
             a = env.config.bcflag(:,1) == env.geometry.bedge(face1,5);
             s1 = find(a == 1);
 
-            flux1=env.config.bcflag(s1,2);%+flowrateZ(face1,1)/normfaceaux2;
+            flux1=env.config.bcflag(s1,2);
             b = env.config.bcflag(:,1) == env.geometry.bedge(face2,5);
             s2 = find(b == 1);
-            flux2=env.config.bcflag(s2,2);%+flowrateZ(face2,1)/normfaceaux2;
+            flux2=env.config.bcflag(s2,2);
 
             s(No,1) = -(1/sum(lambda))*(r(No,1)*flux1 + r(No,2)*flux2);
         end
@@ -305,8 +304,8 @@ end
 % Saídas
 %% -------------------------------------------------
 weight = weight(weight ~= 0);
-preMPFAD.weight = weight(1,1:apw(nNodes+1)-1);
-preMPFAD.s = s;
+premethod.MPFAD.weight = weight(1,1:apw(nNodes+1)-1);
+premethod.MPFAD.s = s;
 
 end
 

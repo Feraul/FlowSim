@@ -1,4 +1,4 @@
-function [premethod] = ferncodes_Kde_Ded_Kt_Kn(env,parmRichardEq,premethod)
+function [premethod] = ferncodes_Kde_Ded_Kt_Kn_TPFA(env,parmRichardEq,premethod)
 
 % inicialiazacao de variaveis globais
 bedge   = env.geometry.bedge;
@@ -13,14 +13,14 @@ if env.config.numcase < 400 || isempty(parmRichardEq)
     auxkmap = env.config.perm;
 else
     auxkmap = parmRichardEq.auxperm;
-    % parâmetros de retenção (ajuste conforme seu código)
+    % parÃ¢metros de retenÃ§Ã£o (ajuste conforme seu cÃ³digo)
     alpha = parmRichardEq.alpha;
     pp    = parmRichardEq.pp;
     q    = parmRichardEq.q;
     nvg   = parmRichardEq.nvg;
 end
 
-% Inicialização das variáveis de saída
+% InicializaÃ§Ã£o das variÃ¡veis de saÃ­da
 nb = size(bedge,1);
 ni = size(inedge,1);
 
@@ -69,8 +69,6 @@ K22 = auxkmap(matid,5);
 
 Kn = (K11.*vy.^2 - 2*K12.*vx.*vy + K22.*vx.^2) ./ normv2;
 
-Kt = ((vy).*(K11.*vx + K12.*vy) + ...
-    (-vx) .*(K21.*vx + K22.*vy)) ./ normv2;
 
 %% =====================================================
 %% FLOWRATE BOUNDARY
@@ -81,16 +79,16 @@ if 430<numcase && numcase<450 && numcase~=436
     %Se = ones(nelem,1);
     maskT=  bedge(:,5)<200;
     h_contorno=nflagface(:,2);
-    % Casos 431, 435 (mesma fórmula)
+    % Casos 431, 435 (mesma fÃ³rmula)
     if numcase==437
-        mask = h_contorno <= 0;        % índices onde neg NÃO é positivo
+        mask = h_contorno <= 0;        % Ã­ndices onde neg NÃƒO Ã© positivo
         coef=env.config.perm(1,2) .* exp(alpha*h_contorno(mask));
         K11 = auxkmap(matid,2).*(~maskT)+coef;
         K12 = auxkmap(matid,3);
         K21 = auxkmap(matid,4);
         K22 = auxkmap(matid,5).*(~maskT)+coef;
     elseif numcase==438
-        mask = h_contorno <1;        % índices onde neg NÃO é positivo
+        mask = h_contorno <1;        % Ã­ndices onde neg NÃƒO Ã© positivo
         coef=env.config.perm(lef,2:5) .* (2-h_contorno(mask)).^(-1);
         K11 = auxkmap(matid,2).*(~maskT)+ coef(:,1);
         K12 = auxkmap(matid,3).*(~maskT)+ coef(:,2);
@@ -98,7 +96,7 @@ if 430<numcase && numcase<450 && numcase~=436
         K22 = auxkmap(matid,5).*(~maskT)+ coef(:,4);
     else
         coef=zeros(length(maskT),1);
-        mask = h_contorno <0; % índices onde neg NÃO é positivo
+        mask = h_contorno <0; % Ã­ndices onde neg NÃƒO Ã© positivo
         mask1=h_contorno>0;
         coef(mask)= 35.*(2.99*10^(6)./(2.99*10^(6)+abs(h_contorno(mask)).^5));
         coef(mask1)= 35;
@@ -112,8 +110,6 @@ if 430<numcase && numcase<450 && numcase~=436
 
     Kn = (K11.*vy.^2 - 2*K12.*vx.*vy + K22.*vx.^2) ./ normv2;
 
-    Kt = ((vy).*(K11.*vx + K12.*vy) + ...
-        (-vx) .*(K21.*vx + K22.*vy)) ./ normv2;
     B1 = bedge(:,1);
     B2 = bedge(:,2);
     lef = bedge(:,3);
@@ -132,7 +128,7 @@ if 430<numcase && numcase<450 && numcase~=436
     term1 = sum((O-coordB2).*(coordB1-coordB2),2).*c1;
     term2 = sum((O-coordB1).*(coordB2-coordB1),2).*c2;
 
-    flowrateZ(1:nb,1) = A1.*(term1+term2-(nor.^2).*Centro(:,2)) -(c2-c1).*Kt;
+    flowrateZ(1:nb,1) = A1.*(term1+term2-(nor.^2).*Centro(:,2));
 
     %---------------------------------------------------------------------
     % condicao de contorno de Neumann
@@ -210,13 +206,9 @@ K22R = auxkmap(matR,5);
 
 Kn1 = (K11L.*vy.^2 - 2*K12L.*vx.*vy + K22L.*vx.^2) ./ normv2;
 
-Kt1 = ((vy).*(K11L.*vx + K12L.*vy) + ...
-    (-vx) .*(K21L.*vx + K22L.*vy)) ./ normv2;
 
 Kn2 = (K11R.*vy.^2 - 2*K12R.*vx.*vy + K22R.*vx.^2) ./ normv2;
 
-Kt2 = ((vy).*(K11R.*vx + K12R.*vy) + ...
-    (-vx) .*(K21R.*vx + K22R.*vy)) ./ normv2;
 
 
 %% =====================================================
@@ -225,8 +217,6 @@ Kt2 = ((vy).*(K11R.*vx + K12R.*vy) + ...
 
 Kde = -nv .* ((Kn1.*Kn2)) ./ (Kn1.*H2 + Kn2.*H1);
 
-Ded = (dot(vd1,vcen,2)./(nv.^2)) - ...
-    (1./nv).*((Kt2./Kn2).*H1 + (Kt1./Kn1).*H2);
 
 %% =====================================================
 %% FLOW INTERNAL
@@ -236,27 +226,18 @@ if 430<numcase && numcase<450
 
     idx = nb + (1:ni);
 
-    flowrateZ(idx) = Kde .*(centelem(rel,2)-centelem(lef,2)-Ded.*(no2-no1));
+    flowrateZ(idx) = Kde .*(centelem(rel,2)-centelem(lef,2));
 
     flowresultZ = flowresultZ + ...
         accumarray(lef,flowrateZ(idx),size(flowresultZ))- ...
         accumarray(rel,flowrateZ(idx),size(flowresultZ));
 
 end
-if strcmp(env.config.pmethod,'mpfad')
-premethod.MPFAD.Hesq=Hesq;
-premethod.MPFAD.Kde=Kde;
-premethod.MPFAD.Kn=Kn;
-premethod.MPFAD.Kt=Kt;
-premethod.MPFAD.Ded=Ded;
-premethod.MPFAD.flowrateZ=flowrateZ;
-premethod.MPFAD.flowresultZ=flowresultZ;
-else
+
 premethod.TPFA.Hesq=Hesq;
 premethod.TPFA.Kde=Kde;
 premethod.TPFA.Kn=Kn;
 premethod.TPFA.flowrateZ=flowrateZ;
 premethod.TPFA.flowresultZ=flowresultZ;
-end
 
 end

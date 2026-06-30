@@ -1,5 +1,5 @@
-function [p,flowrate,flowresult,flowratedif,faceaux,parmRichardEq,premethod]=...
-    ferncodes_iterpicard(M_old,RHS_old,premethod,parmRichardEq,env,time,...
+function [p,flowrate,flowresult,flowratedif,faceaux,parmRichardEq,preMPFAD]=...
+    ferncodes_iterpicard(M_old,RHS_old,preMPFAD,parmRichardEq,env,time,...
     dt,source_wells,preTPFA)
 
 % incialicando parametros globais
@@ -11,14 +11,14 @@ h_kickoff=parmRichardEq.h_old;
 %% calculo do residuo Inicial
 R0=norm(M_old*h_kickoff-RHS_old);
 p_old=h_kickoff;
-%% inicializando dados para iteração Picard
+%% inicializando dados para iteraÃ§Ã£o Picard
 step=0;
 er=1;
 while (nltol<er || nltol==er) && (step<maxiter)
-    % atualiza iterações
+    % atualiza iteraÃ§Ãµes
     step=step+1;
 
-    % --- bloco de estabilização L-scheme ---
+    % --- bloco de estabilizaÃ§Ã£o L-scheme ---
    n = size(M_old,1);
    M_L   = M_old;%+ 0.1 * speye(n);     % M^{(k)} + L I
    RHS_L = RHS_old;% + 0.1 * parmRichardEq.h_old;      % RHS^{(k)} + L h^{(k)}
@@ -46,16 +46,16 @@ while (nltol<er || nltol==er) && (step<maxiter)
 
         if strcmp(env.config.pmethod,'tpfa')
             [env,parmRichardEq] = PLUG_kfunction(env,parmRichardEq,time);
-            [premethod] = ferncodes_Kde_Ded_Kt_Kn_TPFA(env,parmRichardEq,premethod);
-          
+            [preTPFA] = ferncodes_Kde_Ded_Kt_Kn(env,parmRichardEq,preTPFA);
+            premethod.TPFA=preTPFA;
             [M,I,]=ferncodes_globalmatrix_TPFA(env,premethod,parmRichardEq);
         else
             [env,parmRichardEq] = PLUG_kfunction(env,parmRichardEq,time);
-            [premethod] = ferncodes_Kde_Ded_Kt_Kn(env,parmRichardEq,premethod);
+            [preMPFAD] = ferncodes_Kde_Ded_Kt_Kn(env,parmRichardEq,preMPFAD);
             % calculo dos pesos que correspondem ao LPEW2
-            [premethod,~,~] = ferncodes_Pre_LPEW_2_vect(premethod,parmRichardEq,env);
-            
-            [M,I,] = ferncodes_globalmatrix_MPFAD(env,premethod,parmRichardEq);
+            [preMPFAD,~,~] = ferncodes_Pre_LPEW_2_vect(preMPFAD,parmRichardEq,env);
+            premethod.MPFAD=preMPFAD;
+            [M,I,] = ferncodes_globalmatrix(env,preme,parmRichardEq);
         end
 
         %------------------------------------------------------------------
@@ -118,13 +118,13 @@ if strcmp(pmethod,'nlfvpp')
 else
     if strcmp(env.config.pmethod,'tpfa')
         [flowrate,flowresult,flowratedif,faceaux] = ferncodes_flowrateTPFA(p,...
-            premethod,parmRichardEq,env);
+            preTPFA,parmRichardEq,env);
     else
         % auxiliary variables interpolation
-        [pinterp,~]=ferncodes_pressureinterpNLFVPP(p,premethod,env);
+        [pinterp,~]=ferncodes_pressureinterpNLFVPP(p,preMPFAD,env);
         %Get the flow rate (Diamond)
         [flowrate,flowresult,flowratedif,faceaux] = ferncodes_flowrate(p,pinterp,...
-            premethod,parmRichardEq,env);
+            preMPFAD,parmRichardEq,env);
     end
 
 end
