@@ -56,12 +56,13 @@ if 200 < env.config.numcase && env.config.numcase < 300
     elseif env.config.numcase == 251
         kmap = kmap;
     end
-% ============================================================
-% CASOS 300–350 → Hidráulica
-% ============================================================
+    % ============================================================
+    % CASOS 300–350 → Hidráulica
+    % ============================================================
 elseif 300 < env.config.numcase && env.config.numcase < 400
+    %pensar aqui !!!!
     source_wells= defineWells(env,parmRichardEq);
-    [parmgroundwater, source_wells] = prehydraulic(env);
+    [parmgroundwater, source_wells] = prehydraulic(env,source_wells);
 
     if ismember(env.config.numcase, [341 380.1 341.1])
         Nmod = 100;
@@ -70,9 +71,9 @@ elseif 300 < env.config.numcase && env.config.numcase < 400
     if 350 < env.config.numcase && env.config.numcase < 400
         [env, parmconcentra] = preconcentration(env, source_wells);
     end
-% ============================================================
-% CASOS 400–500 → Richards
-% ============================================================
+    % ============================================================
+    % CASOS 400–500 → Richards
+    % ============================================================
 elseif 400 < env.config.numcase && env.config.numcase < 500
 
     [parmRichardEq,env] = preRE(env);
@@ -81,15 +82,13 @@ elseif 400 < env.config.numcase && env.config.numcase < 500
 end
 % PARA CADA BENCHAMARK MODIFICAR !!!
 % ============================================================
-% Define the norm of permeability or conductivity hidraulic 
+% Define the norm of permeability or conductivity hidraulic
 % tensor ("normk")
 [env,parmRichardEq] = calcnormk(env, parmRichardEq,0);
 %=============================================================
 % flag boundary condition
 [env] = ferncodes_calflag(env,parmRichardEq,0);
 % ============================================================
-% CHAMADA FINAL
-% ============================================================
 setmethod(source_wells, 'i', 8, env, parmconcentra, parmgroundwater,...
-          parmRichardEq);
+    parmRichardEq);
 toc

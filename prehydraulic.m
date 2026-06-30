@@ -3,9 +3,11 @@
 % artesanais, condicao inicial hydrologica e alguns outros
 % parametro fisicos necessarios para rodar os problemas, alem disso, pode
 % colocar os parametros para os novos casos
-function [parmgroundwater,wells]=prehydraulic(env)
+function [parmgroundwater,source_wells]=prehydraulic(env,source_wells)
 
-global numcase elem centelem
+numcase=env.config.numcase;
+elem=env.geometry.elem;
+centelem=env.geometry.centelem;
 % inicialize os parametros
 SS=0; h_init=0; MM=0; wells=0; dt=0; P=0;
 
@@ -423,4 +425,6 @@ parmgroundwater.MM=MM;
 parmgroundwater.dt=dt;
 parmgroundwater.P=P;
 parmgroundwater.h_hold=h_hold;
+%--------------------------------------------------------------------------
+source_wells.wells=wells;
 end
