@@ -1,17 +1,15 @@
 addpath(fullfile(pwd, 'tests', 'helpers'));  %% bootstrap so fs_* helpers resolve
-%SMOKE_CLASS_HIERARCHY  Verify OOP class-hierarchy state (which load vs which fail).
+%SMOKE_CLASS_HIERARCHY  Verify OOP class-hierarchy is unified under MetodoBase.
 %
-%   Codifies the study finding: MetodoBase + SimulacaoBase are alive;
-%   SolverBase + BenchmarkBase are missing (making SolverMPFAH, SolverNLFVPP,
-%   Caso1 unloadable); 33 of 35 CasoNNN classes are missing.
-%
-%   This test EXPECTS the broken state. When the study eventually addresses
-%   it (e.g. by creating SolverBase / BenchmarkBase / MetodoMPFAH / ...),
-%   this test flips to expect the FIXED state — the failing assertions
-%   become the "regression detector" for the fix.
+%   Post-PR-A2 state:
+%     - MetodoBase + subclasses MPFAD, TPFA, MPFAH, NLFVPP, MPFAQL: all load
+%     - SimulacaoBase + subclasses SimRichards, SimGroundwater, Caso439: all load
+%     - SolverBase, BenchmarkBase, SolverMPFAH, SolverNLFVPP, Caso1: gone/dead
+%     - Missing CasoNNN (331, 437, ...): still absent (out of PR-A2 scope)
 fs_setup('smoke_class_hierarchy');
 
 works = {'MetodoBase', 'MetodoMPFAD', 'MetodoTPFA', ...
+         'MetodoMPFAH', 'MetodoNLFVPP', 'MetodoMPFAQL', ...
          'SimulacaoBase', 'SimRichards', 'SimGroundwater', 'Caso439'};
 for k = 1:numel(works)
     name = works{k};
@@ -22,15 +20,13 @@ for k = 1:numel(works)
     catch
         ok = false;
     end
-    fs_expect(ok, sprintf('%s loads (should be alive)', name));
+    fs_expect(ok, sprintf('%s loads (unified MetodoBase hierarchy)', name));
 end
 
-% Study finding: these classes should FAIL to load in current state.
-% When study evolves, flip these expectations (e.g. add SolverBase.m → assert loads).
-broken = {'SolverMPFAH', 'SolverNLFVPP', 'SolverBase', ...
-          'BenchmarkBase', 'Caso1', 'Caso331', 'Caso437'};
-for k = 1:numel(broken)
-    name = broken{k};
+% Post-PR-A2: these must NOT load — they were deleted / never should have existed.
+gone = {'SolverBase', 'SolverMPFAH', 'SolverNLFVPP', 'BenchmarkBase', 'Caso1'};
+for k = 1:numel(gone)
+    name = gone{k};
     isEmpty = false; hasErr = false;
     try
         mc = meta.class.fromName(name);
@@ -39,7 +35,21 @@ for k = 1:numel(broken)
         hasErr = true;
     end
     fs_expect(isEmpty || hasErr, ...
-        sprintf('%s does NOT load (study assertion: currently broken)', name));
+        sprintf('%s does NOT load (deleted in PR-A2)', name));
+end
+
+% Missing CasoNNN classes — still absent (Phase F triage).
+stillMissing = {'Caso331', 'Caso437'};
+for k = 1:numel(stillMissing)
+    name = stillMissing{k};
+    try
+        mc = meta.class.fromName(name);
+        isEmpty = isempty(mc);
+    catch
+        isEmpty = false;
+    end
+    fs_expect(isEmpty, sprintf('%s still absent (Phase F scope)', name));
 end
 
 fs_teardown();
+
