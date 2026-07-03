@@ -7,7 +7,8 @@ _Deep-dive companion to `README.md`. Answers "where does X live?" and "who calls
 ### Mesh & connectivity (once per mesh load)
 | Function | Location | Purpose |
 |---|---|---|
-| `preprocessormod` | root | reads Start.dat, builds env.geometry from .msh |
+| `preprocessormod` | `runtime/preproc/` | reads Start.dat, builds env.geometry from .msh |
+| `preprocessmethod` | `runtime/preproc/` | per-method premethod setup |
 | `ferncodes_elementface` | `legacy/ferncodes/shared/` | builds V, N, F element-face maps |
 | `fs.mesh.build` | `+fs/+mesh/` | wraps env.geometry → FS.mesh + FS.geom |
 | `fs.csr.buildCorners` | `+fs/+csr/` | CSR-flat node→corner layout |
@@ -16,11 +17,12 @@ _Deep-dive companion to `README.md`. Answers "where does X live?" and "who calls
 ### Boundary conditions (per-timestep)
 | Function | Location | Purpose |
 |---|---|---|
-| `PLUG_bcfunction` | root | evaluates BC via benchmark |
-| `PLUG_bcfunction_con` | root | concentration BC |
-| `PLUG_kfunction` | root | evaluates permeability tensor (per-h) |
-| `PLUG_sourcefunction` | root | source term |
-| `PLUG_dfunction` | root | dispersion |
+| `PLUG_bcfunction` | `runtime/plug/` | evaluates BC via benchmark |
+| `PLUG_bcfunction_con` | `runtime/plug/` | concentration BC |
+| `PLUG_kfunction` | `runtime/plug/` | evaluates permeability tensor (per-h) |
+| `PLUG_sourcefunction` | `runtime/plug/` | source term |
+| `PLUG_dfunction` | `runtime/plug/` | dispersion |
+| `PLUG_Gfunction` | `runtime/plug/` | gravitational source |
 | `ferncodes_calflag` | `legacy/ferncodes/shared/` | builds nflag + nflagface |
 
 ### Permeability & tensors
@@ -36,10 +38,10 @@ _Deep-dive companion to `README.md`. Answers "where does X live?" and "who calls
 ### LPEW2 (linearity-preserving interpolation weights)
 | Function | Location | Purpose |
 |---|---|---|
-| `OPT_Interp_LPEW` | root | per-node geometry gather (legacy) |
-| `angulos_Interp_LPEW2` | root | corner angles (legacy) |
-| `netas_Interp_LPEW` | root | netas ratios (legacy) |
-| `Lamdas_Weights_LPEW2` | root | lambda weights (legacy) |
+| `OPT_Interp_LPEW` | `legacy/ferncodes/lpew/` | per-node geometry gather (legacy) |
+| `angulos_Interp_LPEW2` | `legacy/ferncodes/lpew/` | corner angles (legacy) |
+| `netas_Interp_LPEW` | `legacy/ferncodes/lpew/` | netas ratios (legacy) |
+| `Lamdas_Weights_LPEW2` | `legacy/ferncodes/lpew/` | lambda weights (legacy) |
 | `ferncodes_Ks_Interp_LPEW2` | `legacy/ferncodes/lpew/` | permeability projections (legacy) |
 | `ferncodes_Pre_LPEW_2_vect` | `legacy/ferncodes/lpew/` | ★ legacy driver (partial vect) |
 | `fs.lpew.OPT` | `+fs/+lpew/` | batched geometry gather (vect) |
@@ -91,15 +93,17 @@ _Deep-dive companion to `README.md`. Answers "where does X live?" and "who calls
 | Function | Location | Purpose |
 |---|---|---|
 | `main` | root | ENTRY POINT |
-| `hydraulic` | root | steady hydraulic solver |
-| `hydraulic_RE` | root | Richards transient solver |
-| `IMPES` | root | Implicit Pressure Explicit Saturation |
-| `IMPEC` | root | Implicit Pressure Explicit Concentration |
-| `IMHEC` | root | (variant) |
-| `preRE` | root | Richards preprocessor |
-| `setmethod` | root | dispatch |
-| `soil_properties` | root | Richards accumulation term (dtheta/dt) |
-| `addsource` | root | inserts wells into system |
+| `hydraulic` | `runtime/time/` | steady hydraulic solver |
+| `hydraulic_RE` | `runtime/time/` | Richards transient solver |
+| `IMPES` | `runtime/time/` | Implicit Pressure Explicit Saturation |
+| `IMPEC` | `runtime/time/` | Implicit Pressure Explicit Concentration |
+| `IMHEC` | `runtime/time/` | (variant) |
+| `preRE` | `runtime/preproc/` | Richards preprocessor |
+| `setmethod` | `runtime/time/` | time-driver dispatch |
+| `soil_properties` | `runtime/util/` | Richards accumulation term (dtheta/dt) |
+| `addsource` | `runtime/util/` | inserts wells into system |
+| `solver` | `runtime/util/` | linear solve wrapper |
+| `postprocessor` | `runtime/util/` | writes results |
 
 ### Test harness
 | Function | Location | Purpose |

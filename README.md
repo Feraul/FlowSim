@@ -1,32 +1,58 @@
 # FlowSim — Vectorized
 
-**2-D groundwater / Richards / two-phase flow simulator in MATLAB.**  
+[![Release](https://img.shields.io/github/v/release/Feraul/FlowSim?sort=semver)](https://github.com/Feraul/FlowSim/releases)
+[![License](https://img.shields.io/badge/license-see_LICENSE-blue.svg)](LICENSE)
+
+**2-D groundwater / Richards / two-phase flow simulator in MATLAB.**
 Finite-volume methods (TPFA, MPFA-D, MPFA-H, NLFV-PP, MPFA-QL) on unstructured
 quad + triangle meshes. Originally by the UFPE / groundwater group.
 
-**Vectorization campaign** (branch `flowsim-artur`, 2026-07): the LPEW2 and
-MPFA-D hot paths have been fully vectorized (`+fs/` tree). Legacy code
-retained under `legacy/` and shadowed by the new modules via path precedence
-— nothing breaks, everything is opt-in.
+The **2026-07 vectorization campaign** is complete and shipped as
+[`v2.0.0-vectorized`](https://github.com/Feraul/FlowSim/releases/tag/v2.0.0-vectorized)
+plus root-cleanup follow-up
+[`v2.0.1-vectorized`](https://github.com/Feraul/FlowSim/releases/tag/v2.0.1-vectorized).
+Pre-campaign state is preserved as
+[`v1.0.0-pre-vectorization`](https://github.com/Feraul/FlowSim/releases/tag/v1.0.0-pre-vectorization)
+(+ backup branch `legacy-v1.0`). See [`CHANGELOG.md`](CHANGELOG.md).
+
+- **LPEW2** pipeline: fully vectorized (`+fs/+lpew/+v2/`), bit-identical to
+  legacy at 1e-15 relative tolerance
+- **MPFA-D** assembly: fully vectorized (`+fs/+assembly/+mpfad/`),
+  bit-identical to golden baseline
+- **TPFA** assembly: vectorized (`+fs/+assembly/+tpfa/`)
+- **MPFA-H, MPFA-QL, NLFV-PP, NLFV-H, DMP**: scaffolded — entry points
+  exist under `+fs/+assembly/`, currently delegate to legacy for
+  correctness while awaiting the full triplet-form rewrite (see
+  `CHANGELOG.md` → _Deferred to future work_)
+
+Legacy code remains under `legacy/` and is picked up by the MATLAB path at
+lower precedence — nothing breaks, vectorized modules take over silently.
 
 ---
 
 ## Quick start
 
+```bash
+# Clone
+git clone https://github.com/Feraul/FlowSim.git
+cd FlowSim
+
+# Configure Start.dat (mesh path, numcase, pmethod, phasekey) — see docs/how-to-use.md
+
+# Run headless (Linux/WSL):
+tools/mrun -c $(pwd) main.m
+```
+
+Interactive from MATLAB:
 ```matlab
-% Inside MATLAB (or via WSL: tools/mrun -c $(pwd) main.m)
-flowsim_init            % sets all paths (+fs/ first, legacy/ last)
+cd /path/to/FlowSim
+flowsim_init            % path setup (+fs/ first, legacy/ last)
 main                    % reads Start.dat + runs the configured case
 ```
 
-That's it. The simulator reads `Start.dat`, picks the case via `createBenchmark`,
-picks the method via `createMetodo`, picks the simulation type via
-`createSimulacao`, and runs the time loop.
-
-Under WSL:
-```bash
-tools/mrun -c $(pwd) main.m           # headless matlab.exe -batch
-```
+The pipeline reads `Start.dat` → picks the case via `createBenchmark` →
+picks the method via `createMetodo` → picks the simulation type via
+`createSimulacao` → runs the time loop.
 
 ## Tests
 
@@ -43,7 +69,23 @@ tools/mrun -c $(pwd) tests/unit/unit_assembly_mpfad.m
 tools/mrun -c $(pwd) tests/unit/unit_baseline_reproduces.m
 ```
 
-All 400+ assertions currently green — see `CHANGELOG.md` per-PR breakdown.
+~500 assertions currently green — see `CHANGELOG.md` for the per-PR breakdown.
+
+---
+
+## Documentation
+
+| Doc | For | Content |
+|---|---|---|
+| [`docs/how-to-use.md`](docs/how-to-use.md) | users | install, configure `Start.dat`, run, troubleshoot |
+| [`docs/code-map.md`](docs/code-map.md) | contributors | where every function lives + who calls whom |
+| [`docs/vectorization-guide.md`](docs/vectorization-guide.md) | contributors | recipe for extending `+fs/` with a new module |
+| [`docs/globals-audit.md`](docs/globals-audit.md) | contributors | inventory of remaining `global` variables |
+| [`runtime/README.md`](runtime/README.md) | contributors | active-runtime tree (`preproc/time/plug/util`) |
+| [`legacy/README.md`](legacy/README.md) | contributors | 12-cluster legacy index + retirement status |
+| [`tests/README.md`](tests/README.md) | contributors | test harness details |
+| [`CHANGELOG.md`](CHANGELOG.md) | everyone | release history + full PR log |
+| [`manual/manual.pdf`](manual/manual.pdf) | scientists | original numerical-methods manual (theory) |
 
 ---
 

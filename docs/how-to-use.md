@@ -9,18 +9,21 @@ _User-facing guide. For contributors, see `README.md` + `docs/code-map.md` + `do
 
 ## First-time setup
 
-1. **Clone the repo** and check out the working branch:
+1. **Clone the repo** (release lives on `master`):
    ```bash
    git clone https://github.com/Feraul/FlowSim.git
    cd FlowSim
-   git checkout flowsim-artur
+   # master = current v2.0.1-vectorized release
+   # for the pre-vectorization backup, use: git checkout v1.0.0-pre-vectorization
    ```
 
 2. **Edit `Start.dat`** — the runtime config file. Every line marked
    `>>> EDITE AQUI <<<` is a user parameter. Most important:
    - **Output path** (line 33) — where results go. Use forward slashes on
      Linux/WSL, backslashes on Windows.
-   - **Mesh path** (line 218) — folder containing `.msh` files.
+   - **Mesh path** (line 218) — folder containing `.msh` files. All meshes
+     now live under `meshes/{hermeline,kozdon,other}/` — point Start.dat at
+     the right subdir.
    - **Mesh filename** (line 224) — e.g. `M8.msh`.
    - **`numcase`** — which benchmark case (see `factories/createBenchmark.m`
      for the full list).
@@ -133,8 +136,8 @@ Start.dat into a temp dir — your real `Start.dat` is never mutated by tests.
   path is Windows-style but MATLAB can't create it (path doesn't exist or
   no write permission). Fix the output path.
 - **"Cannot open file: ...\some_mesh.msh"** — Start.dat's mesh dir + mesh
-  filename don't match a real file. Meshes now live at repo root (see
-  `README.md` structure section).
+  filename don't match a real file. Meshes now live under
+  `meshes/{hermeline,kozdon,other}/` — update Start.dat's mesh path.
 - **Baseline test failing** — probably a numerical change slipped in. Compare
   `norm(M_new - M_leg, 'fro') / norm(M_leg, 'fro')`. If < 1e-12, adjust
   tolerance; if > 1e-12, there's a real bug.
