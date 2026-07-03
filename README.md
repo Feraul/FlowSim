@@ -3,6 +3,8 @@
 [![Release](https://img.shields.io/github/v/release/Feraul/FlowSim?sort=semver)](https://github.com/Feraul/FlowSim/releases)
 [![License](https://img.shields.io/badge/license-see_LICENSE-blue.svg)](LICENSE)
 
+> 🇧🇷 **Versao em portugues**: [`LEIAME.md`](LEIAME.md)
+
 **2-D groundwater / Richards / two-phase flow simulator in MATLAB.**
 Finite-volume methods (TPFA, MPFA-D, MPFA-H, NLFV-PP, MPFA-QL) on unstructured
 quad + triangle meshes. Originally by the UFPE / groundwater group.

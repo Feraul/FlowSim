@@ -10,6 +10,8 @@ to the `+fs/…` version because `+fs/` is added first (higher precedence).
 This is the **shadow** pattern — legacy stays as the correctness reference,
 vectorized code takes over silently.
 
+> 🇧🇷 **Versao em portugues**: [`legacy/LEIAME.md`](LEIAME.md)
+
 ---
 
 ## Cluster index

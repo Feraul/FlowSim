@@ -4,6 +4,8 @@ Run everything from WSL via `tools/mrun`. This folder assumes MATLAB R2024a
 on the Windows side (see `../tools/mrun` and the FlowSim vectorization project
 AEGIS policy at `<axon>/my-axon/dev-projects/flowsim-vectorize/_policy.md`).
 
+> 🇧🇷 **Versao em portugues**: [`tests/LEIAME.md`](LEIAME.md)
+
 ## Layout
 
 ```

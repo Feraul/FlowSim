@@ -2,6 +2,8 @@
 
 _Deep-dive companion to `README.md`. Answers "where does X live?" and "who calls Y?"._
 
+> 🇧🇷 **Versao em portugues**: [`docs/mapa-de-codigo.md`](mapa-de-codigo.md)
+
 ## Architecture at a glance
 
 The end-to-end pipeline, showing where each moving part lives on disk and

@@ -2,6 +2,8 @@
 
 _Companion to `CHANGELOG.md`. Written for developers extending the `+fs/` tree._
 
+> 🇧🇷 **Versao em portugues**: [`docs/guia-de-vetorizacao.md`](guia-de-vetorizacao.md)
+
 ## The FS struct
 
 The vectorization enabler is the **`FS` struct** (built by `fs.mesh.build`):

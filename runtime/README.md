@@ -4,6 +4,8 @@ Files here are called during a live FlowSim simulation. Grouped by role in
 the pipeline. All four subdirs are added to the MATLAB path by
 `flowsim_init.m` via `genpath`.
 
+> 🇧🇷 **Versao em portugues**: [`runtime/LEIAME.md`](LEIAME.md)
+
 ## Directory layout
 
 ```

@@ -3,6 +3,8 @@
 _Documents the top globals still in use in legacy code + their FS struct equivalents._
 _Refreshed 2026-07-03 post-v2.0.1 (paths reflect the `runtime/` + `legacy/` layout)._
 
+> 🇧🇷 **Versao em portugues**: [`docs/auditoria-de-globais.md`](auditoria-de-globais.md)
+
 ## Why not "just kill them"?
 
 The `global` declarations in `legacy/ferncodes/**` cannot be removed piecemeal

@@ -2,6 +2,8 @@
 
 _User-facing guide. For contributors, see `README.md` + `docs/code-map.md` + `docs/vectorization-guide.md`._
 
+> 🇧🇷 **Versao em portugues**: [`docs/como-usar.md`](como-usar.md)
+
 ## Prerequisites
 
 - **MATLAB R2019b or later** (tested with R2024a on Windows via WSL)
