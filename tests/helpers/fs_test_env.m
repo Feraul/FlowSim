@@ -47,19 +47,30 @@ function testDir = fs_test_env(varargin)
         'C:\\Users\\flc59\\Documents\\Benchmark_Cases\\[^\r\n]*', ...
         regexprep(outPath, '\\', '\\\\'));
 
-    % Patch line 218 (mesh dir → FlowSim repo root, so .msh files at root resolve)
-    txt = regexprep(txt, ...
-        'C:\\Users\\flc59\\Documents\\Malhas2', ...
-        regexprep(fsRoot, '\\', '\\\\'));
-
-    % Patch the mesh filename (line ~224) — owner's Start.dat may reference a
-    % mesh not committed to git. Default to M8.msh (smallest present in repo).
+    % Patch line 218 (mesh dir → correct meshes/ subfolder based on filename).
+    % Deterministic pattern (PR-E1):
+    %   HermelineMeshMod*.msh  → meshes/hermeline/
+    %   M8*.msh                → meshes/kozdon/
+    %   anything else          → meshes/other/  (fallback: fsRoot for pre-E1 checkouts)
     meshFile = p.Results.mesh;
     if isempty(meshFile), meshFile = 'M8.msh'; end
-    if ~isfile(fullfile(fsRoot, meshFile))
-        warning('fs_test_env:MeshMissing', ...
-                'Mesh %s not found at %s', meshFile, fsRoot);
+    if startsWith(meshFile, 'HermelineMeshMod')
+        meshDir = fullfile(fsRoot, 'meshes', 'hermeline');
+    elseif startsWith(meshFile, 'M8')
+        meshDir = fullfile(fsRoot, 'meshes', 'kozdon');
+    else
+        meshDir = fullfile(fsRoot, 'meshes', 'other');
     end
+    % Backward-compat fallback: if not in the resolved subfolder, try fsRoot
+    if isempty(dir(fullfile(meshDir, meshFile))) && ...
+       ~isempty(dir(fullfile(fsRoot, meshFile)))
+        meshDir = fsRoot;
+    end
+
+    txt = regexprep(txt, ...
+        'C:\\Users\\flc59\\Documents\\Malhas2', ...
+        regexprep(meshDir, '\\', '\\\\'));
+
     % The mesh filename in Start.dat is the FIRST line after "Nome do arquivo de malha"
     % that isn't a comment / blank / marker. Rather than line-count, replace by
     % pattern: any line ending in .msh that isn't inside a comment.
