@@ -108,11 +108,18 @@ function [lambda, r] = lambdaWeights(FS, Kt1, Kt2, Kn1, Kn2, theta1, theta2, ve1
             zeta_n(kk) = zn / zd;
         end
 
-        % Lambda for boundary corners
+        % Lambda for boundary corners — MATCHES Pre_LPEW_2_vect boundary path,
+        % which wraps zeta(k+1) → zeta(1) at k=nec (differs from the canonical
+        % Lamdas_Weights_LPEW2 which uses zeta(nec+1) without wrap for boundary).
+        % Pre_LPEW_2_vect is the production reference (called by MetodoMPFAD).
         for kk = 1:nec
-            % Boundary: always uses zeta(kk) and zeta(kk+1) (no wrap)
-            lambda(e_range(kk)) = Kn1_n(kk, 1)*netas_n(kk, 1)*zeta_n(kk) ...
-                                 + Kn1_n(kk, 2)*netas_n(kk, 2)*zeta_n(kk+1);
+            if kk == nec
+                lambda(e_range(kk)) = Kn1_n(kk, 1)*netas_n(kk, 1)*zeta_n(kk) ...
+                                     + Kn1_n(kk, 2)*netas_n(kk, 2)*zeta_n(1);
+            else
+                lambda(e_range(kk)) = Kn1_n(kk, 1)*netas_n(kk, 1)*zeta_n(kk) ...
+                                     + Kn1_n(kk, 2)*netas_n(kk, 2)*zeta_n(kk+1);
+            end
         end
     end
 end
