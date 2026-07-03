@@ -1,5 +1,7 @@
 # FlowSim v2 — For scientists
 
+> 🇧🇷 **Versao em portugues**: [`docs/para-cientistas.md`](para-cientistas.md)
+
 **Read this first if you used FlowSim before the 2026-07 vectorization campaign
 and want to keep running your cases without touching the internals.**
 
