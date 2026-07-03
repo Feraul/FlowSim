@@ -2,6 +2,115 @@
 
 _Deep-dive companion to `README.md`. Answers "where does X live?" and "who calls Y?"._
 
+## Architecture at a glance
+
+The end-to-end pipeline, showing where each moving part lives on disk and
+which layer supersedes which:
+
+```
+                                ┌──────────────────────────────────────┐
+   USER                         │  Start.dat  ← configure numcase,    │
+    │                           │              pmethod, phasekey,     │
+    │                           │              mesh path, meshfile    │
+    │                           └──────────────────────────────────────┘
+    │
+    │                     ╔═══════════════════════════════════════════╗
+    ▼                     ║              (root)                       ║
+  ┌─────────┐             ║  main.m ─▶ flowsim_init ─▶ path setup:    ║
+  │ main.m  │──────────┐  ║    (+fs/) > (base|solvers|factories|      ║
+  └─────────┘          │  ║     simulacoes|benchmarks) > (runtime/**) ║
+                       │  ║     > (legacy/**)                          ║
+                       │  ╚═══════════════════════════════════════════╝
+                       │
+                       ▼
+      ┌───────────────────────────────────────────────────────────────┐
+      │  runtime/preproc/preprocessormod                               │
+      │    • reads Start.dat                                           │
+      │    • parses .msh (from meshes/{hermeline,kozdon,other}/)       │
+      │    • builds env.geometry.{coord,elem,bedge,inedge,esurn,nsurn} │
+      │    • builds env.config.{numcase,pmethod,phasekey,perm,bcflag}  │
+      └───────────────────────────────────────────────────────────────┘
+                       │
+       ┌───────────────┼────────────────┬──────────────────┐
+       ▼               ▼                ▼                  ▼
+    factory:       factory:         factory:         (benchmark
+    createBench    createMetodo     createSimulacao   initParms)
+    ─────────      ─────────        ─────────
+       │               │                │
+       ▼               ▼                ▼
+   benchmarks/     solvers/         simulacoes/
+   Caso439.m       Metodo{TPFA,     Sim{Groundwater,
+   (only one       MPFAD,MPFAH,     Richards}
+    fully impl)    MPFAQL,NLFVPP}    (SimulacaoBase)
+                   (MetodoBase)
+                       │
+                       ▼
+      ┌───────────────────────────────────────────────────────────────┐
+      │  runtime/preproc/preprocessmethod   ▲ per-method premethod    │
+      │    ├── ferncodes_elementface  (legacy/ferncodes/shared/)      │
+      │    ├── ferncodes_Kde_Ded_Kt_Kn   (legacy/ferncodes/mpfad/)    │
+      │    └── ferncodes_Pre_LPEW_2_vect (legacy/ferncodes/lpew/)     │
+      │           │                                                    │
+      │           └──▶ ★ SHADOWED by fs.lpew.v2.preLPEW2 (+fs/+lpew/) │
+      └───────────────────────────────────────────────────────────────┘
+                       │
+                       ▼
+      ┌───────────────────────────────────────────────────────────────┐
+      │  runtime/time/setmethod   dispatch by phasekey                │
+      │    ├── phasekey=1 → IMPES              (single-phase)         │
+      │    ├── phasekey=4 → hydraulic          (steady groundwater)   │
+      │    ├── phasekey=5 → IMPEC              (concentration)        │
+      │    └── phasekey=6 → hydraulic_RE       (Richards transient)   │
+      └───────────────────────────────────────────────────────────────┘
+                       │
+                       ▼
+      ┌───────────────────────────────────────────────────────────────┐
+      │  TIME LOOP  (per timestep, per Picard iteration)              │
+      │    ┌─────────────────────────────────────────────────────┐   │
+      │    │  runtime/plug/PLUG_kfunction    → new kmap          │   │
+      │    │  metodo.atualizarPremethod      → refresh Kde/etc   │   │
+      │    │                                                      │   │
+      │    │  metodo.montarSistema           → assemble [M, I]:  │   │
+      │    │    ┌──────────────────────────────────────────────┐│   │
+      │    │    │ ★ NEW (v2.0): +fs/+assembly/<method>/build   ││   │
+      │    │    │   ├── mpfad: FULLY VECTORIZED (bit-identical)││   │
+      │    │    │   ├── tpfa:  vectorized                       ││   │
+      │    │    │   └── {mpfah,mpfaql,nlfvpp,nlfvh,dmp}:        ││   │
+      │    │    │        scaffold → delegates to legacy         ││   │
+      │    │    │                                                ││   │
+      │    │    │ OLD: ferncodes_globalmatrix_<METHOD>          ││   │
+      │    │    │      (legacy/ferncodes/<method>/)             ││   │
+      │    │    └──────────────────────────────────────────────┘│   │
+      │    │                                                      │   │
+      │    │  addsource                        (runtime/util/)   │   │
+      │    │  metodo.resolver                                     │   │
+      │    │    └── fs.iter.{picard,anderson,lscheme}            │   │
+      │    │        (+fs/+iter/) — wrapper over legacy iters     │   │
+      │    │                                                      │   │
+      │    │  metodo.calcularFlowrate         (+fs/+flow/ or     │   │
+      │    │                                    legacy/ferncodes)│   │
+      │    │  runtime/util/postprocessor      → VTK/mat output   │   │
+      │    └─────────────────────────────────────────────────────┘   │
+      └───────────────────────────────────────────────────────────────┘
+```
+
+### Two-layer path shadow (the key correctness pattern)
+
+```
+    +fs/…      ← higher precedence  (vectorized modules)
+    ─────
+    base/, solvers/, factories/, simulacoes/, benchmarks/
+    ─────
+    runtime/{preproc,time,plug,util}/
+    ─────
+    legacy/…   ← lower precedence   (legacy correctness reference)
+```
+
+When a symbol exists in both, MATLAB resolves to `+fs/`. Legacy stays as
+the correctness oracle — every `+fs/` module has a `tests/unit/unit_*.m`
+that diffs against its legacy twin at `< 1e-12` relative tolerance.
+
+---
 ## By concern
 
 ### Mesh & connectivity (once per mesh load)
