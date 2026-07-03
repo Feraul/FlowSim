@@ -1,16 +1,4 @@
-%--------------------------------------------------------------------------
-%UNIVERSIDADE FEDERAL DE PERNAMBUCO
-%CENTRO DE TECNOLOGIA E GEOCIENCIAS
-%PROGRAMA DE POS GRADUACAO EM ENGENHARIA CIVIL
-%TOPICOS ESPECIAIS EM DINAMICA DOS FLUIDOS COMPUTACIONAL
-%--------------------------------------------------------------------------
-%Subject: numerical routine to load the geometry in gmsh and to create...
-%the mesh parameter 
-%Type of file: FUNCTION
-%Criate date: 12/08/2012
-%Modify data:   /  /2012
-%Adviser: Paulo Lyra and Darlan Karlo
-%Programer: Márcio Souza
+
 %--------------------------------------------------------------------------
 %Goals:
 %This function writes and plots the data calculated.   
