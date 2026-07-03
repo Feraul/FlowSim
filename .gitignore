@@ -1,0 +1,21 @@
+
+# ── Option A hygiene (2026-07-03): untrack large binaries + benchmark data ──
+# Proper relocation happens in the scheduled Option D pass (after PR-A7).
+# History still contains these blobs; use git filter-repo later if you want
+# a shrunk history (owner's call — force-push required).
+
+# Windows executable of Gmsh mesh generator (64 MB) — never should have been in git
+gmsh.exe
+
+# SPE benchmark data (~90 MB combined) — moved to my-axon data folder in Option D
+spe_perm.dat
+spe10.mat
+spe*.dat
+spe*.mat
+
+# MATLAB autosave files (Phase E cleanup — 12 files pre-committed, still tracked)
+*.asv
+
+# Test scratch
+tests/data/tmp/
+tests/golden/*.big.mat

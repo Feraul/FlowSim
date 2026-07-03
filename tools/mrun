@@ -1,0 +1,197 @@
+#!/usr/bin/env bash
+# mrun — run MATLAB scripts from WSL, headless
+#
+# Usage:
+#   mrun <script.m> [args...]      # run a .m script (WSL path)
+#   mrun -e "expression"           # run a MATLAB expression
+#   mrun -c <dir> -e "..."         # cd into <dir> first (WSL path)
+#   mrun -c <dir> <script.m>       # same, for a script
+#   mrun -t <secs> <script.m>      # kill MATLAB after <secs> seconds (default 1800 = 30 min)
+#   mrun -q <script.m>             # quiet — suppress the harmless UNC change-notify warning
+#   mrun -l <logfile> <script.m>   # tee output to <logfile>
+#   mrun -h                        # help
+#
+# Behaviour:
+#   - Runs matlab.exe -batch (Windows-side, headless — no GUI, no splash, no JVM UI)
+#   - Auto-converts WSL paths to Windows UNC via `wslpath -w`
+#   - Auto-cd's into the script's containing directory before invoking
+#   - Auto-suppresses ONLY the cosmetic "Unable to obtain a change notification handle" warning
+#     unless you pass -v (verbose)
+#   - Propagates MATLAB's exit code (0 = ok, non-0 = MATLAB error or timeout)
+#   - Timeout via `timeout(1)` — MATLAB hangs get killed and marked as exit 124
+#
+# Environment overrides:
+#   MRUN_MATLAB       — full path to matlab.exe (default: `matlab.exe` on PATH)
+#   MRUN_TIMEOUT      — default timeout in seconds (default: 1800)
+#   MRUN_LOG_DIR      — where to write auto-logs when -L is passed (default: /tmp/mrun-logs)
+#
+# Owner-authorized 2026-07-03 (AXON project flowsim-vectorize AEGIS policy).
+
+set -euo pipefail
+
+# ── defaults ─────────────────────────────────────────────────────────────
+MATLAB_EXE="${MRUN_MATLAB:-matlab.exe}"
+TIMEOUT_SECS="${MRUN_TIMEOUT:-1800}"
+LOG_DIR="${MRUN_LOG_DIR:-/tmp/mrun-logs}"
+
+# ── options ──────────────────────────────────────────────────────────────
+EXPR=""
+CD_DIR=""
+LOGFILE=""
+QUIET=1        # default ON — filter the UNC warning
+VERBOSE=0
+AUTO_LOG=0
+
+usage() {
+    sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'
+    exit "${1:-0}"
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -h|--help)      usage 0 ;;
+        -e|--expr)      EXPR="$2"; shift 2 ;;
+        -c|--cd)        CD_DIR="$2"; shift 2 ;;
+        -t|--timeout)   TIMEOUT_SECS="$2"; shift 2 ;;
+        -l|--log)       LOGFILE="$2"; shift 2 ;;
+        -L|--auto-log)  AUTO_LOG=1; shift ;;
+        -q|--quiet)     QUIET=1; shift ;;
+        -v|--verbose)   QUIET=0; VERBOSE=1; shift ;;
+        --)             shift; break ;;
+        -*)             echo "mrun: unknown option: $1" >&2; usage 2 ;;
+        *)              break ;;
+    esac
+done
+
+# ── resolve script + build the MATLAB command ─────────────────────────────
+if [[ -n "$EXPR" ]]; then
+    if [[ $# -gt 0 ]]; then
+        echo "mrun: -e expression cannot be combined with a script arg" >&2
+        exit 2
+    fi
+    MATLAB_CMD="$EXPR"
+    SCRIPT_LABEL="expr:${EXPR:0:40}"
+elif [[ $# -ge 1 ]]; then
+    SCRIPT="$1"; shift
+    if [[ ! -f "$SCRIPT" ]]; then
+        echo "mrun: script not found: $SCRIPT" >&2
+        exit 2
+    fi
+    # Resolve the script's absolute WSL path, then its Windows-visible UNC path.
+    SCRIPT_ABS="$(realpath "$SCRIPT")"
+    SCRIPT_DIR_WSL="$(dirname "$SCRIPT_ABS")"
+    SCRIPT_WIN="$(wslpath -w "$SCRIPT_ABS")"
+    SCRIPT_DIR_WIN="$(wslpath -w "$SCRIPT_DIR_WSL")"
+    SCRIPT_STEM="$(basename "$SCRIPT_ABS" .m)"
+    # Auto-add the script's directory to MATLAB path (so helper functions in the
+    # same folder resolve). If -c wasn't given, cd there too.
+    if [[ -z "$CD_DIR" ]]; then
+        CD_DIR="$SCRIPT_DIR_WSL"
+    fi
+    # MATLAB's `-batch <name>` and `run(fullpath)` BOTH cd internally to the
+    # script's directory before executing. To preserve the cwd we set via -c,
+    # read the script as text and evalin('base', ...) instead. This runs the
+    # script contents in base workspace without changing cwd.
+    SCRIPT_WIN_ESCAPED="${SCRIPT_WIN//\'/\'\'}"
+    SCRIPT_DIR_WIN_ESCAPED="${SCRIPT_DIR_WIN//\'/\'\'}"
+    if [[ $# -gt 0 ]]; then
+        # Positional args → function-style call by name (after addpath).
+        # Functions don't cd; only script files do.
+        ARG_LIST="$(printf ",'%s'" "$@")"
+        MATLAB_CMD="addpath('${SCRIPT_DIR_WIN_ESCAPED}'); ${SCRIPT_STEM}(${ARG_LIST#,})"
+    else
+        # Read the script file as text, then eval in base workspace.
+        # This avoids MATLAB's automatic cd to the script's directory.
+        MATLAB_CMD="addpath('${SCRIPT_DIR_WIN_ESCAPED}'); evalin('base', fileread('${SCRIPT_WIN_ESCAPED}'))"
+    fi
+    SCRIPT_LABEL="$SCRIPT_STEM"
+else
+    echo "mrun: no script and no -e expression" >&2
+    usage 2
+fi
+
+# ── wrap with cd() + warning suppressions ────────────────────────────────
+# Prepend a preamble that:
+#   1. silences the noisy WSL warnings (UNC change-notify + addpath-not-found)
+#   2. sets warning backtrace off (single-line warnings, no "In foo/In bar")
+#   3. cd's to the target directory (from -c or the script's dir)
+# In verbose mode we skip the warning suppression so the user sees everything.
+PREAMBLE=""
+if [[ "$VERBOSE" -eq 0 ]]; then
+    PREAMBLE="warning off backtrace; warning('off','MATLAB:mpath:nonExistentOrNotADirectory'); "
+fi
+if [[ -n "$CD_DIR" ]]; then
+    if [[ ! -d "$CD_DIR" ]]; then
+        echo "mrun: cd dir does not exist: $CD_DIR" >&2
+        exit 2
+    fi
+    WIN_CD="$(wslpath -w "$(realpath "$CD_DIR")")"
+    WIN_CD_ESCAPED="${WIN_CD//\'/\'\'}"
+    PREAMBLE="${PREAMBLE}cd('${WIN_CD_ESCAPED}'); "
+fi
+MATLAB_CMD="${PREAMBLE}${MATLAB_CMD}"
+
+# ── auto-log filename ─────────────────────────────────────────────────────
+if [[ "$AUTO_LOG" -eq 1 && -z "$LOGFILE" ]]; then
+    mkdir -p "$LOG_DIR"
+    STAMP="$(date -u +%Y%m%d-%H%M%S)"
+    LOGFILE="$LOG_DIR/${STAMP}-${SCRIPT_LABEL//[^A-Za-z0-9._-]/_}.log"
+fi
+
+# ── run ───────────────────────────────────────────────────────────────────
+if [[ "$VERBOSE" -eq 1 ]]; then
+    echo "mrun: matlab   = $MATLAB_EXE" >&2
+    echo "mrun: timeout  = ${TIMEOUT_SECS}s" >&2
+    echo "mrun: command  = $MATLAB_CMD" >&2
+    echo "mrun: logfile  = ${LOGFILE:-<stdout only>}" >&2
+fi
+
+# The filter — strip WSL-artefact warnings (MATLAB emits these on every run
+# under UNC paths, harmless but noisy). We match both:
+#   - "Unable to obtain a change notification handle" (from cd/addpath to UNC)
+#   - "Name is nonexistent or not a directory" (from addpath to a missing dir)
+# and skip the entire multi-line warning block up to its closing "]".
+#
+# Awk script lives in a heredoc to avoid bash's brace/bracket tokenizer.
+_mrun_awk_filter='
+    /^\[Warning: Unable to obtain a change notification handle/ { skip=1; if (/\]$/) {skip=0}; next }
+    /^\[Warning: Name is nonexistent or not a directory/         { skip=1; if (/\]$/) {skip=0}; next }
+    skip==1 { if (/\]/) { skip=0 } ; next }
+    { print }
+'
+_mrun_filter() {
+    if [[ "$QUIET" -eq 1 ]]; then
+        # 1. Strip MATLAB's leading BS (\b) + CR (\r) — Windows console artefacts
+        # 2. Apply the awk warning-block filter
+        tr -d '\b\r' | awk "$_mrun_awk_filter"
+    else
+        # Even in verbose mode, strip \b\r so line contents are readable
+        tr -d '\b\r'
+    fi
+}
+_mrun_tee() {
+    if [[ -n "$LOGFILE" ]]; then
+        tee "$LOGFILE"
+    else
+        cat
+    fi
+}
+
+# The tee — replaced by _mrun_tee function above
+
+# Execute — timeout wraps matlab.exe; stderr is merged into stdout
+set +e
+timeout --signal=KILL "${TIMEOUT_SECS}s" \
+    "$MATLAB_EXE" -batch "$MATLAB_CMD" 2>&1 \
+    | _mrun_filter \
+    | _mrun_tee
+STATUS="${PIPESTATUS[0]}"
+set -e
+
+# Report timeout distinctly
+if [[ "$STATUS" == "124" || "$STATUS" == "137" ]]; then
+    echo "mrun: TIMEOUT after ${TIMEOUT_SECS}s — MATLAB killed" >&2
+    exit 124
+fi
+
+exit "$STATUS"
