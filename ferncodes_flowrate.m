@@ -1,5 +1,5 @@
 function [flowrate,flowresult,flowratedif,faceaux] = ...
-ferncodes_flowrate(p,pinterp,premethod,parmRichardEq,env)
+ferncodes_flowrate(p,pinterp,env)
 
 coord=env.geometry.coord;
 bedge=env.geometry.bedge;
@@ -8,16 +8,14 @@ centelem=env.geometry.centelem;
 bcflag=env.config.bcflag;
 numcase=env.config.numcase;
 viscosity=env.config.visc;
-flowrateZ=premethod.MPFAD.flowrateZ;
-
-
+flowrateZ=env.premethod.MPFAD.flowrateZ;
 
 %--------------------------------------------------------------------------
-Kde=premethod.MPFAD.Kde;
-Ded=premethod.MPFAD.Ded;
-Kn=premethod.MPFAD.Kn;
-Kt=premethod.MPFAD.Kt;
-Hesq=premethod.MPFAD.Hesq;
+Kde=env.premethod.MPFAD.Kde;
+Ded=env.premethod.MPFAD.Ded;
+Kn=env.premethod.MPFAD.Kn;
+Kt=env.premethod.MPFAD.Kt;
+Hesq=env.premethod.MPFAD.Hesq;
 nflag=env.config.nflag;
 
 bedgesize = size(bedge,1);
@@ -131,8 +129,7 @@ if (200<numcase && numcase<300) || (379<numcase && numcase<400)
     con1 = cinterp(node1);
     con2 = cinterp(node2);
 
-    flowratedif(bedgesize+1:end) = ...
-        Kdec .* (Con(rel)-Con(lef)-Dedc.*(con2-con1));
+    flowratedif(bedgesize+1:end) = Kdec .* (Con(rel)-Con(lef)-Dedc.*(con2-con1));
 
 end
 

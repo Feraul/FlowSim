@@ -1,34 +1,25 @@
 %It is called by "ferncodes_solvepressure.m"
 
-function [M,I,elembedge] = ferncodes_globalmatrix_MPFAD(env,premethod,parmRichardEq)
+function [M,I,elembedge] = ferncodes_globalmatrix_MPFAD(env,parms)
 % incializacao de parametros globais
-coord=env.geometry.coord;
-auxelem=env.geometry.elem;
-auxesurn2=env.geometry.esurn2;
-auxesurn1=env.geometry.esurn1;
-bedge=env.geometry.bedge;
-inedge=env.geometry.inedge;
-auxcentelem=env.geometry.centelem;
-auxbcflag=env.config.bcflag;
-auxnumcase=env.config.numcase;
-auxnormals=env.geometry.normals;
-auxmodflowcompared=env.config.modflowcase;
-nflag=env.config.nflag;
-Ded=premethod.MPFAD.Ded;
-flowrateZ=premethod.MPFAD.flowrateZ;
-flowresultZ=premethod.MPFAD.flowresultZ;
-
-% incializacao de parametros locais
-Kt=premethod.MPFAD.Kt;
+coord=env.geometry.coord; auxelem=env.geometry.elem;auxesurn2=env.geometry.esurn2;
+auxesurn1=env.geometry.esurn1;bedge=env.geometry.bedge;inedge=env.geometry.inedge;
+auxcentelem=env.geometry.centelem;auxbcflag=env.config.bcflag;
+auxnumcase=env.config.numcase;auxnormals=env.geometry.normals;
+auxmodflowcompared=env.config.modflowcase;nflag=env.config.nflag;
+Ded=env.premethod.MPFAD.Ded;flowrateZ=env.premethod.MPFAD.flowrateZ;
+flowresultZ=env.premethod.MPFAD.flowresultZ;s=env.premethod.MPFAD.s;
+Kde=env.premethod.MPFAD.Kde;weight=env.premethod.MPFAD.weight;
+Kn=env.premethod.MPFAD.Kn;Hesq=env.premethod.MPFAD.Hesq;
+nflagface = env.config.nflagface; Kt=env.premethod.MPFAD.Kt;
 %-----------------------inicio da rOtina ----------------------------------%
-%Constr�i a matriz global.
-
+%Constrói a matriz global.
 %Initialize "bedgesize" and "inedgesize"
 bedgesize = size(bedge,1);
 inedgesize = size(inedge,1);
 
 %Initialize "M" (global matrix) and "I" (known vector)
-M = sparse(size(auxelem,1),size(auxelem,1)); %Prealoca��o de M.
+M = sparse(size(auxelem,1),size(auxelem,1)); %Prealocação de M.
 I = zeros(size(auxelem,1),1);
 m=0;
 jj=1;
@@ -37,7 +28,7 @@ elembedge=0;
 visonface = 1;
 %% ========================================================================
 % -------------------------------------------------------------------------
-% PR�-C�LCULOS DE FLAGS E VISCOSIDADES
+% PRÉ-CÁLCULOS DE FLAGS E VISCOSIDADES
 % -------------------------------------------------------------------------
 isConc   = (200 < auxnumcase && auxnumcase < 300);
 isSat    = (30  < auxnumcase && auxnumcase < 200);
@@ -75,7 +66,7 @@ elseif isSat
 end
 
 % -------------------------------------------------------------------------
-% MONTAGEM VETORIZADA � BOUNDARY EDGES
+% MONTAGEM VETORIZADA – BOUNDARY EDGES
 % -------------------------------------------------------------------------
 % Dirichlet vs Neumann
 isDir = flagb < 200;
@@ -84,7 +75,7 @@ isNeu = ~isDir;
 % ---------------- Dirichlet ----------------
 % viscosidade efetiva (escalares)
 if isConc && is2phase
-    visD = sum(visonface_b(isDir,:),2);   % m�dia simples (mant�m l�gica de uso escalar)
+    visD = sum(visonface_b(isDir,:),2);   % média simples (mantém lógica de uso escalar)
 elseif isSat
     visD = visonface_b(isDir);
 else
@@ -102,16 +93,16 @@ v2n   = v2b(isDir);
 c1D = nflag(v1n,2);
 c2D = nflag(v2n,2);
 
-KnD   = premethod.MPFAD.Kn(isDir);
-HesqD = premethod.MPFAD.Hesq(isDir);
+KnD   = Kn(isDir);
+HesqD = Hesq(isDir);
 A_D   = -KnD ./ (HesqD .* sqrt(sum(v0D.^2,2)));
 
-% contribui��es em M(lef,lef)
+% contribuições em M(lef,lef)
 rowsM_D = lefD;
 colsM_D = lefD;
 valsM_D = -visD .* A_D .* sum(v0D.^2,2);
 
-% contribui��es em I(lef)
+% contribuições em I(lef)
 dot_v2v0 = sum(v2D .* (-v0D),2);
 dot_v1v0 = sum(v1D .*  v0D ,2);
 valsI_D  = -visD .* A_D .* (dot_v2v0 .* c1D + dot_v1v0 .* c2D) + ...
@@ -119,29 +110,10 @@ valsI_D  = -visD .* A_D .* (dot_v2v0 .* c1D + dot_v1v0 .* c2D) + ...
 
 % ---------------- Neumann ----------------
 lefN  = elemL(isNeu);
-norN  = nor_b(isNeu);
-flagN = flagb(isNeu);
-
-valsI_N = zeros(nnz(isNeu),1);
-
-if auxnumcase==341 || auxnumcase==341.1
-    % ponto m�dio da aresta
-    a1 = 0.5*(coord(v1b(isNeu),:) + coord(v2b(isNeu),:));
-    if auxnumcase==341
-        auxk = arrayfun(@(x,y) ferncodes_K(x,y), a1(:,1), a1(:,2));
-    else
-        auxk = arrayfun(@(x) ferncodes_K_1D(x), a1(:,1));
-    end
-    valsI_N = auxnormals(isNeu,2) .* auxk(:) .* nflagface(isNeu,2);
-else
-    % mapeia flagN em bcflag(:,1)
-    [~,loc] = ismember(flagN, auxbcflag(:,1));
-    mask222=bedge(:,5)>200;
-    valsI_N = norN .* auxbcflag(loc,2)+flowrateZ(find(mask222==1),1);%+(~mask222).*flowrateZ(1:length(flagN),1);
-end
-
+valsI_N = env.benchmark.calcularNeumannBoundary(isNeu, bedge, ...
+    auxbcflag, nflagface, flowrateZ, nor_b, auxnormals, env);
 % -------------------------------------------------------------------------
-% MONTAGEM VETORIZADA � INTERNAL EDGES
+% MONTAGEM VETORIZADA – INTERNAL EDGES
 % -------------------------------------------------------------------------
 % viscosidade efetiva interna
 if isConc && is2phase
@@ -152,48 +124,48 @@ else
     visI = ones(inedgesize,1);
 end
 
-kI = visI .* premethod.MPFAD.Kde;
+kI = visI .*Kde;
 
-% M contribui��es (4 por aresta)
+% M contribuições (4 por aresta)
 rowsM_I = [eL; eL; eR; eR];
 colsM_I = [eL; eR; eR; eL];
 valsM_I = [-kI; +kI; -kI; +kI];
 
-% I contribui��es por Dirichlet em v�rtices
+% I contribuições por Dirichlet em vértices
 maskD1 = nflag(e1,1) < 200;
 maskD2 = nflag(e2,1) < 200;
 
 valsI_L = zeros(size(I));
 valsI_R = zeros(size(I));
 
-% v�rtice 1
+% vértice 1
 kD1 = kI(maskD1) .* Ded(maskD1) .* nflag(e1(maskD1),2);
 idxL1 = eL(maskD1);
 idxR1 = eR(maskD1);
 valsI_L = valsI_L+ accumarray(idxL1, -kD1, size(I));
 valsI_R = valsI_R + accumarray(idxR1, +kD1, size(I));
 
-% v�rtice 2
+% vértice 2
 kD2 = kI(maskD2) .* Ded(maskD2) .* nflag(e2(maskD2),2);
 idxL2 = eL(maskD2);
 idxR2 = eR(maskD2);
 valsI_L = valsI_L + accumarray(idxL2, +kD2, size(I));
 valsI_R = valsI_R + accumarray(idxR2, -kD2, size(I));
 
-% Neumann em v�rtices (201/202)
+% Neumann em vértices (201/202)
 maskN1 = (nflag(e1,1)==201 | nflag(e1,1)==202);
 maskN2 = (nflag(e2,1)==201 | nflag(e2,1)==202);
 %--------------------------------------------------------------------------
-% define quem � v�rtice de contorno (ajuste o crit�rio aqui)
+% define quem é vértice de contorno (ajuste o critério aqui)
 isBCvertex = (nflag(:,1) == 201) | (nflag(:,1) == 202);
-% m�scara de faces internas que t�m pelo menos um v�rtice de contorno
+% máscara de faces internas que têm pelo menos um vértice de contorno
 maskFaceHasBC = isBCvertex(e1);
 
-% �ndices das faces internas que tocam o contorno
+% índices das faces internas que tocam o contorno
 idxFacesHasBC = find(maskFaceHasBC);
 if ~isempty(idxFacesHasBC)
     %--------------------------------------------------------------------------
-    kN1 = kI(idxFacesHasBC) .* Ded(idxFacesHasBC) .* premethod.MPFAD.s(e1(maskN1));
+    kN1 = kI(idxFacesHasBC) .* Ded(idxFacesHasBC) .*s(e1(maskN1));
     idxL1N =inedge(idxFacesHasBC,3);
     idxR1N = inedge(idxFacesHasBC,4);
     valsI_L = valsI_L + accumarray(idxL1N, -kN1, size(I));
@@ -201,10 +173,10 @@ if ~isempty(idxFacesHasBC)
 end
 maskFaceHasBC1 =  isBCvertex(e2);
 
-% �ndices das faces internas que tocam o contorno
+% índices das faces internas que tocam o contorno
 idxFacesHasBC1 = find(maskFaceHasBC1);
 if ~isempty(idxFacesHasBC1)
-    kN2     = kI(idxFacesHasBC1) .* Ded(idxFacesHasBC1) .* premethod.MPFAD.s(e2(maskN2));
+    kN2     = kI(idxFacesHasBC1) .* Ded(idxFacesHasBC1) .* s(e2(maskN2));
     idxL2N  = inedge(idxFacesHasBC1,3);
     idxR2N  = inedge(idxFacesHasBC1,4);
     valsI_L = valsI_L + accumarray(idxL2N, +kN2, size(I));
@@ -212,79 +184,80 @@ if ~isempty(idxFacesHasBC1)
 end
 
 % -------------------------------------------------------------------------
-% CONTRIBUI��ES DOS N�S COM nflag > 200 (esurn1/esurn2), INCLUIDO NEUMANN
+% CONTRIBUIÇÕES DOS NÓS COM nflag > 200 (esurn1/esurn2), INCLUIDO NEUMANN
 % -------------------------------------------------------------------------
 maskInt1 = nflag(e1,1) > 200;
 maskInt2 = nflag(e2,1) > 200;
 
-% v�rtice 1
+% vértice 1
 edges1 = find(maskInt1);
+edges2= find(maskInt2);
 rows_add = [];
 cols_add = [];
 vals_add = [];
 
+% ── fora do loop — calcula tamanho total UMA vez ─────────────────
+nec_per  = auxesurn2(2:end) - auxesurn2(1:end-1);
+total    = 2*(sum(nec_per(e1(maskInt1))) + sum(nec_per(e2(maskInt2))));
+
+% ── aloca UMA vez — sem realocação dentro do loop ─────────────────
+rows_add = zeros(total,1);
+cols_add = zeros(total,1);
+vals_add = zeros(total,1);
+ptr = 1;
+
 for k = edges1.'
-    % k
-    % n  = e1(k);
-    % idx = (auxesurn2(n)+1):auxesurn2(n+1);
-    % cols_loc = auxesurn1(idx);
-    % wloc     = preMPFAD.weight(idx).';
-    % rows_locL = repmat(eL(k),1,numel(cols_loc));
-    % rows_locR = repmat(eR(k),1,numel(cols_loc));
-    % valL = +visI(k)*preMPFAD.Kde(k)*preMPFAD.Ded(k)*wloc;
-    % valR = -visI(k)*preMPFAD.Kde(k)*preMPFAD.Ded(k)*wloc;
-    % rows_add = [rows_add, rows_locL, rows_locR];
-    % cols_add = [cols_add, cols_loc,  cols_loc ];
-    % vals_add = [vals_add, valL,      valR    ];
-    n  = e1(k);
-    idx = (auxesurn2(n)+1):auxesurn2(n+1);
-
+    n        = e1(k);
+    idx      = auxesurn2(n)+1 : auxesurn2(n+1);
+    nc       = numel(idx);
     cols_loc = auxesurn1(idx);
-    wloc     = premethod.MPFAD.weight(idx).';
+    coef     = visI(k)*Kde(k)*Ded(k);   % escalar — calcula uma vez
 
-    rows_locL = repmat(eL(k), numel(cols_loc), 1);
-    rows_locR = repmat(eR(k), numel(cols_loc), 1);
+    % L — sem repmat, sem cópia extra
+    ii = ptr:ptr+nc-1;
+    rows_add(ii) = eL(k);               % escalar expandido automaticamente
+    cols_add(ii) = cols_loc;
+    vals_add(ii) = coef * weight(idx);  % sem wloc(:), sem transposta
 
-    valL = +visI(k)*premethod.MPFAD.Kde(k)*premethod.MPFAD.Ded(k)*wloc(:);
-    valR = -visI(k)*premethod.MPFAD.Kde(k)*premethod.MPFAD.Ded(k)*wloc(:);
+    % R
+    ii = ptr+nc : ptr+2*nc-1;
+    rows_add(ii) = eR(k);
+    cols_add(ii) = cols_loc;
+    vals_add(ii) = -coef * weight(idx);
 
-    rows_add = [rows_add; rows_locL; rows_locR];
-    cols_add = [cols_add; cols_loc(:); cols_loc(:)];
-    vals_add = [vals_add; valL(:);    valR(:)];
+    ptr = ptr + 2*nc;
 end
 
-% v�rtice 2
-edges2 = find(maskInt2);
+% vértice 2
+% ── pre-aloca para edges2 ─────────────────────────────────────────
+nec_per  = auxesurn2(2:end) - auxesurn2(1:end-1);
+total2   = 2 * sum(nec_per(e2(maskInt2)));
+
+rows_add2 = zeros(total2,1);
+cols_add2 = zeros(total2,1);
+vals_add2 = zeros(total2,1);
+ptr2 = 1;
+
 for k = edges2.'
-    % n  = e2(k);
-    % idx = (auxesurn2(n)+1):auxesurn2(n+1);
-    % cols_loc = auxesurn1(idx);
-    % wloc     = preMPFAD.weight(idx).';
-    % rows_locL = repmat(eL(k),1,numel(cols_loc));
-    % rows_locR = repmat(eR(k),1,numel(cols_loc));
-    % valL = -visI(k)*preMPFAD.Kde(k)*preMPFAD.Ded(k)*wloc;
-    % valR = +visI(k)*preMPFAD.Kde(k)*preMPFAD.Ded(k)*wloc;
-    % rows_add = [rows_add, rows_locL, rows_locR];
-    % cols_add = [cols_add, cols_loc,  cols_loc ];
-    % vals_add = [vals_add, valL,      valR    ];
-
-    n  = e2(k);
-    idx = (auxesurn2(n)+1):auxesurn2(n+1);
-
+    n        = e2(k);
+    idx      = auxesurn2(n)+1 : auxesurn2(n+1);
+    nc       = numel(idx);
     cols_loc = auxesurn1(idx);
-    wloc     = premethod.MPFAD.weight(idx).';
+    coef     = visI(k)*Kde(k)*Ded(k);   % escalar — calcula uma vez
 
-    % Agora como vetores coluna
-    rows_locL = repmat(eL(k), numel(cols_loc), 1);
-    rows_locR = repmat(eR(k), numel(cols_loc), 1);
+    % L — sinal negativo para edges2
+    ii = ptr2:ptr2+nc-1;
+    rows_add2(ii) = eL(k);
+    cols_add2(ii) = cols_loc;
+    vals_add2(ii) = -coef * weight(idx);
 
-    valL = -visI(k)*premethod.MPFAD.Kde(k)*premethod.MPFAD.Ded(k)*wloc(:);
-    valR = +visI(k)*premethod.MPFAD.Kde(k)*premethod.MPFAD.Ded(k)*wloc(:);
+    % R — sinal positivo para edges2
+    ii = ptr2+nc : ptr2+2*nc-1;
+    rows_add2(ii) = eR(k);
+    cols_add2(ii) = cols_loc;
+    vals_add2(ii) = +coef * weight(idx);
 
-    % Empilhamento vertical (correto)
-    rows_add = [rows_add; rows_locL; rows_locR];
-    cols_add = [cols_add; cols_loc(:); cols_loc(:)];
-    vals_add = [vals_add; valL(:);    valR(:)];
+    ptr2 = ptr2 + 2*nc;
 end
 
 % -------------------------------------------------------------------------
@@ -292,12 +265,15 @@ end
 % -------------------------------------------------------------------------
 nelem = size(M,1);
 
-% M: boundary + internal + esurn
-rowsM_all = [rowsM_D; rowsM_I; rows_add(:)];
-colsM_all = [colsM_D; colsM_I; cols_add(:)];
-valsM_all = [valsM_D; valsM_I; vals_add(:)];
+% concatena os dois blocos pre-alocados
+rows_all = [rows_add(1:ptr-1);  rows_add2(1:ptr2-1)];
+cols_all = [cols_add(1:ptr-1);  cols_add2(1:ptr2-1)];
+vals_all = [vals_add(1:ptr-1);  vals_add2(1:ptr2-1)];
 
-M = M + sparse(rowsM_all, colsM_all, valsM_all, nelem, nelem);
+% adiciona a M
+M = M + sparse([rowsM_D; rowsM_I; rows_all], ...
+               [colsM_D; colsM_I; cols_all], ...
+               [valsM_D; valsM_I; vals_all], nelem, nelem);
 
 % I: boundary + internal
 I = I + accumarray((1:nelem).',0, size(I)); % garante tamanho
@@ -307,14 +283,7 @@ I = I + valsI_L + valsI_R;
 
 %==========================================================================
 % calcula um problema transiente
-% caso simulacao de aguas subterraneas, lei de Darcy
-if (auxnumcase>330 || auxnumcase==330) && (auxnumcase<400)
-    [M,I]=ferncodes_implicitandcranknicolson(M,I,env,dt);
-end
-% caso solo seco e fluido, Eq. Richards
-if 400<auxnumcase && auxnumcase<500
-    [M,I]=soil_properties(M,I,parmRichardEq,flowresultZ,env);
-end
+[M,I] = env.benchmark.adicionarTermoTemporal(M, I, parms, flowresultZ, env);
 %==========================================================================
 % utilizase somente quando o teste vai ser comparado com resultados do modflow
 if strcmp(auxmodflowcompared,'y')

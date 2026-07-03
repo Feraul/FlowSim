@@ -335,7 +335,7 @@ C:\Users\flc59\Documents\Malhas2
 //Write below the name of the mesh file. Use the extension *.msh: 
 //HermelineMeshModQuad_12_12, edwards_8_8
 
-mesh_clement_quad_distorcido.msh
+mesh_clement_quad.msh
 
 //--------------------------------------------------------------------
 //----------------------- Physical Parameters ------------------------
@@ -432,7 +432,7 @@ s
 //state simulation (parameter of stop). Write below the amount of 
 //days or the PVI's value instead:
 
-8
+2
 
 //--------------------------------------------------------------------
 //------------------------ Boundary Condition ------------------------

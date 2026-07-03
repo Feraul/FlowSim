@@ -1,94 +1,82 @@
-
-%Subject: numerical code used to simulate fluid flow in porous media. That
-%routine calls several others which defines how the equation will be solved
-%Type of file: MAIN
-%Programer: PhD. Fernando Contreras,
 %--------------------------------------------------------------------------
-%Goals: Do the manegement of simulator. This is a MAIN program.
-
+% MAIN — Simulador de fluxo em meios porosos
+% Programer: Fernando Contreras
 %--------------------------------------------------------------------------
-% In this numerical routine the flow may be simulated with one or two phase
-% or contaminants or groundwater (hydraulic head). The functions below are
-% organized in order give flexibility to software resourcers.
-% For example: the saturation and pressure fields are calculated by IMPES,
-% but it may be calculated also by a fully implicit scheme. This change is
-% done in the present rountine just call each function.
+% Fluxo de execucao:
+%   1. Leitura do Start.dat e pre-processamento geometrico
+%   2. Instanciacao dos tres objetos principais (benchmark, metodo, simulacao)
+%   3. Pre-processamento fisico (h_init, parms, kmap, flags, premethod)
+%   4. Chamada ao solver transiente ou estacionario
+%--------------------------------------------------------------------------
 
-%|--------------------------------------|
-%| read the instructions very carefully |
-%| Warning: See preMPFA.m line 53 and 54|
-%|--------------------------------------|
+% ── Path — rodar savepath() somente na primeira execucao ─────────
+% Apos salvar o path com savepath(), o MATLAB encontra as pastas
+% automaticamente em todas as execucoes seguintes.
 
-%Clear the screem
+
+% startup(); savepath();   % ← descomente apenas na primeira vez
+
 clc;
-%Clear all the memory of the matlab
-clear all;
-%Define the format of out data
-format short;
-%It begins the time counter and "profile".
-%% pre-processador
+clear classes   % limpa o cache de classes OOP do MATLAB
+                % obrigatorio sempre que um arquivo .m de classe for editado
 tic
+
+%% ── 1. Pre-processamento geral ───────────────────────────────────
+% Le o arquivo Start.dat e popula:
+%   env.config.*    → numcase, pmethod, phasekey, perm, bcflag, totaltime...
+%   env.geometry.*  → coord, elem, bedge, inedge, centelem, elemarea...
 env = preprocessormod(1);
-% inicializando
-parmconcentra = [];
-parmgroundwater = [];
-parmRichardEq = [];
-source_wells =[];
-%% Inicializações seguras
 
-kmapaux = env.config.perm(1,1);
-env.config.perm=[1 kmapaux 0  0 kmapaux];
+%% ── 2. Instancia os tres objetos a partir do Start.dat ──────────
 
+% benchmark: encapsula a fisica especifica do numcase
+%   → permeabilidade, BC, theta, capacidade hidrica, loop temporal
+env.benchmark = createBenchmark(env.config.numcase);
 
-% ============================================================
-% CASOS 200–300 → Concentração
-% ============================================================
-if 200 < env.config.numcase && env.config.numcase < 300
-    source_wells= defineWells(env,parmRichardEq);
-    [env, parmconcentra] = preconcentration(env, source_wells.wells);
+% metodo: encapsula o metodo numerico (TPFA, MPFA-D, MPFA-H, NL-TPFA)
+%   → pre-processamento geometrico, montagem de matriz, solver linear
+env.metodo = createMetodo(env.config.pmethod);
 
-    if ismember(env.config.numcase, [247 249 250])
-        load('Perm_Var0p1.mat')
-        perm = flipud(perm);
-        auxperm2 = perm(1:125,1:125);
-        kmap = auxperm2';
-        kmap = kmap(:);
-    elseif env.config.numcase == 251
-        kmap = kmap;
-    end
-    % ============================================================
-    % CASOS 300–350 → Hidráulica
-    % ============================================================
-elseif 300 < env.config.numcase && env.config.numcase < 400
-    %pensar aqui !!!!
-    source_wells= defineWells(env,parmRichardEq);
-    [parmgroundwater, source_wells] = prehydraulic(env,source_wells);
+% sim: encapsula o tipo de simulacao (phasekey 0..6)
+%   → pre-processamento fisico do tipo (Richards, groundwater, etc.)
+%   → definicao de fontes e pocos
+sim = createSimulacao(env.config.phasekey);
 
-    if ismember(env.config.numcase, [341 380.1 341.1])
-        Nmod = 100;
-        varK = 0.1;
-    end
-    if 350 < env.config.numcase && env.config.numcase < 400
-        [env, parmconcentra] = preconcentration(env, source_wells);
-    end
-    % ============================================================
-    % CASOS 400–500 → Richards
-    % ============================================================
-elseif 400 < env.config.numcase && env.config.numcase < 500
+%% ── 3. Pipeline de pre-processamento ────────────────────────────
 
-    [parmRichardEq,env] = preRE(env);
-    source_wells= defineWells(env,parmRichardEq);
+% 3a. Pre-processamento fisico do tipo de simulacao
+%     Preenche parms com: h_init, h_old, dt, theta_s, theta_r, alpha...
+%     Cada benchmark implementa seu proprio preprocessar()
+parms        = env.benchmark.initParms();    % struct vazio com campos padrao
+[env, parms] = sim.preprocessar(env, parms); % preRE, prehydraulic, preRichards...
 
-end
-% PARA CADA BENCHAMARK MODIFICAR !!!
-% ============================================================
-% Define the norm of permeability or conductivity hidraulic
-% tensor ("normk")
-[env,parmRichardEq] = calcnormk(env, parmRichardEq,0);
-%=============================================================
-% flag boundary condition
-[env] = ferncodes_calflag(env,parmRichardEq,0);
-% ============================================================
-setmethod(source_wells, 'i', 8, env, parmconcentra, parmgroundwater,...
-    parmRichardEq);
+% 3b. Permeabilidade
+%     Calcula kmap (tensor de permeabilidade por elemento) via benchmark
+%     Popula: env.config.kmap, env.config.auxkmap, env.utils.*
+[env, parms] = PLUG_kfunction(env, parms, 0);
+
+% 3c. Flags de contorno
+%     Monta nflag (por vertice) e nflagface (por face) via benchmark
+%     Popula: env.config.nflag, env.config.nflagface
+%     DEVE rodar antes de preprocessmethod (que usa nflagface)
+[env] = ferncodes_calflag(env, parms, 0);
+
+% 3d. Pre-processamento do metodo numerico
+%     Calcula os parametros geometrico-fisicos especificos do metodo:
+%       TPFA  → Hesq, Kde, Kn, flowrateZ
+%       MPFA-D → Hesq, Kde, Kn, Kt, Ded, pesos LPEW2, s
+%     Popula: env.premethod.TPFA.* ou env.premethod.MPFAD.*
+%     Popula: env.preGravity.*
+[env, parms] = preprocessmethod(env, parms);
+
+%% ── 4. Solver ────────────────────────────────────────────────────
+% Escolhe e executa o solver de acordo com phasekey:
+%   case 1 → One-phase flow (estacionario)
+%   case 4 → Groundwater / hydraulic head
+%   case 5 → Contaminant + hydraulic head
+%   case 6 → Richards (transiente nao-linear)
+%
+% source_wells: pocos injetores/produtores definidos pelo benchmark
+setmethod(sim.definirFontes(env, parms), 'i', 8, env, parms);
+
 toc

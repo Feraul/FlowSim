@@ -1,7 +1,7 @@
 
 %--------------------------------------------------------------------------
 
-function [M,I,elembedge] =ferncodes_globalmatrix_TPFA(env,premethod,parmRichardEq)
+function [M,I,elembedge] =ferncodes_globalmatrix_TPFA(env,parms)
 % incializacao de parametros globais
 coord=env.geometry.coord;
 auxelem=env.geometry.elem;
@@ -14,8 +14,8 @@ auxnumcase=env.config.numcase;
 auxnormals=env.geometry.normals;
 auxmodflowcompared=env.config.modflowcase;
 nflag=env.config.nflag;
-flowrateZ=premethod.TPFA.flowrateZ;
-flowresultZ=premethod.TPFA.flowresultZ;
+flowrateZ=env.premethod.TPFA.flowrateZ;
+flowresultZ=env.premethod.TPFA.flowresultZ;
 
 %-----------------------inicio da rOtina ----------------------------------%
 %Constrói a matriz global.
@@ -99,8 +99,8 @@ v2n   = v2b(isDir);
 c1D = nflag(v1n,2);
 c2D = nflag(v2n,2);
 
-KnD   = premethod.TPFA.Kn(isDir);
-HesqD = premethod.TPFA.Hesq(isDir);
+KnD   = env.premethod.TPFA.Kn(isDir);
+HesqD = env.premethod.TPFA.Hesq(isDir);
 A_D   = -KnD ./ (HesqD .* sqrt(sum(v0D.^2,2)));
 
 % contribuições em M(lef,lef)
@@ -148,7 +148,7 @@ else
     visI = ones(inedgesize,1);
 end
 
-kI = visI .* premethod.TPFA.Kde;
+kI = visI .* env.premethod.TPFA.Kde;
 
 % M contribuições (4 por aresta)
 rowsM_I = [eL; eL; eR; eR];
@@ -180,7 +180,7 @@ if (auxnumcase>330 || auxnumcase==330) && (auxnumcase<400)
 end
 % caso solo seco e fluido, Eq. Richards
 if 400<auxnumcase && auxnumcase<500
-    [M,I]=soil_properties(M,I,parmRichardEq,flowresultZ,env);
+    [M,I]=soil_properties(M,I,parms,flowresultZ,env);
 end
 %==========================================================================
 % utilizase somente quando o teste vai ser comparado com resultados do modflow

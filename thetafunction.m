@@ -1,51 +1,5 @@
 
 % calculo do parametro de van Genutchen: conteudo de agua
-function  theta=thetafunction(h,parmRichardEq,env)
-
-
-numcase=env.config.numcase;
-alpha=parmRichardEq.alpha;
-nvg=parmRichardEq.nvg;
-theta_s= parmRichardEq.theta_s;
-theta_r=parmRichardEq.theta_r;
-pp=parmRichardEq.pp;
-q=parmRichardEq.q;
-
-theta = zeros(size(h));  % inicializa o vetor
-
-if numcase == 436
-    idx_neg = h < 0;          % índices onde h < 0
-    idx_pos = ~idx_neg;       % índices onde h >= 0
-
-    % h < 0
-    theta(idx_neg) = (1 + (-alpha*h(idx_neg)).^nvg).^(-(nvg-1)/nvg);
-
-    % h >= 0
-    theta(idx_pos) = 1;
-elseif numcase==437
-    idx_neg = h < 0;          % índices onde h < 0
-    idx_pos = ~idx_neg;       % índices onde h >= 0
-
-    theta(idx_neg)=theta_r + (theta_s - theta_r).*exp(alpha*h(idx_neg));
-elseif numcase==438
-    theta = ones(size(h,1),1);  % inicializa o vetor
-    idx_neg = h < 1;          % índices onde h < 0
-    theta(idx_neg)=(2-h(idx_neg)).^(-1/3);
-elseif numcase==439
-    Se = ones(size(h,1),1);
-    theta = theta_s.*ones(size(h,1),1);  % inicializa o vetor
-    idx_neg = h < 0;          % índices onde h < 0
-    c=40000;
-    Se(idx_neg)=c./(c+abs(h(idx_neg)).^(2.9));
-    theta(idx_neg)=theta_r + (theta_s - theta_r) .*Se(idx_neg);
-else
-    idx_neg = h < 0;
-    idx_pos = ~idx_neg;
-
-    % h < 0
-    theta(idx_neg) = theta_r + ((theta_s - theta_r) ./ ((1 + (-alpha*h(idx_neg)).^pp).^q));
-
-    % h >= 0
-    theta(idx_pos) = theta_s;
-end
+function theta = thetafunction(h, parms, env)
+    theta = env.benchmark.calcularTheta(h, parms);
 end

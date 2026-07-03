@@ -1,243 +1,145 @@
-function [premethod] = ferncodes_Kde_Ded_Kt_Kn_TPFA(env,parmRichardEq,premethod)
+function [env] = ferncodes_Kde_Ded_Kt_Kn_TPFA(env, parms)
 
-% inicialiazacao de variaveis globais
-bedge   = env.geometry.bedge;
-inedge  = env.geometry.inedge;
-coord   = env.geometry.coord;
-centelem= env.geometry.centelem;
-numcase = env.config.numcase;
-nflagface=env.config.nflagface;
+bedge    = env.geometry.bedge;
+inedge   = env.geometry.inedge;
+coord    = env.geometry.coord;
+centelem = env.geometry.centelem;
+elem     = env.geometry.elem;
+nflagface= env.config.nflagface;
 
-elem    = env.geometry.elem;
-if env.config.numcase < 400 || isempty(parmRichardEq)
+if env.config.numcase < 400 || isempty(parms)
     auxkmap = env.config.perm;
 else
-    auxkmap = parmRichardEq.auxperm;
-    % parâmetros de retenção (ajuste conforme seu código)
-    alpha = parmRichardEq.alpha;
-    pp    = parmRichardEq.pp;
-    q    = parmRichardEq.q;
-    nvg   = parmRichardEq.nvg;
+    auxkmap = parms.auxperm;
 end
 
-% Inicialização das variáveis de saída
 nb = size(bedge,1);
 ni = size(inedge,1);
-
 flowrateZ   = zeros(nb+ni,1);
 flowresultZ = zeros(size(elem,1),1);
 
-%% =====================================================
-%% BOUNDARY EDGES GEOMETRY
-%% =====================================================
-
-v1 = coord(bedge(:,2),:) - coord(bedge(:,1),:);
-vm = 0.5*(coord(bedge(:,2),:) + coord(bedge(:,1),:));
-
+%% ── Boundary edges geometry ──────────────────────────────────────
+v1     = coord(bedge(:,2),:) - coord(bedge(:,1),:);
 Centro = centelem(bedge(:,3),:);
+ve2    = coord(bedge(:,2),:) - Centro;
 
-ve2 = coord(bedge(:,2),:) - Centro;
-
-ce = cross(v1,ve2,2);
-
-nv = vecnorm(v1,2,2);
-
-
-Hesq = vecnorm(ce,2,2)./nv;
-
-lef = bedge(:,3);
-
-vx = v1(:,1);
-vy = v1(:,2);
-
+vx     = v1(:,1);
+vy     = v1(:,2);
 normv2 = vx.^2 + vy.^2;
+nv     = sqrt(normv2);                              % substitui vecnorm
 
-%% =====================================================
-%% PERMEABILITY (BOUNDARY)
-%% =====================================================
+% cross 2D — so componente Z
+Hesq   = abs(vx.*ve2(:,2) - vy.*ve2(:,1)) ./ nv;   % substitui cross+vecnorm
 
+lef    = bedge(:,3);
+
+%% ── Permeabilidade boundary — base ──────────────────────────────
 matid = elem(bedge(:,3),5);
-
-K11 = auxkmap(matid,2);
-K12 = auxkmap(matid,3);
-K21 = auxkmap(matid,4);
-K22 = auxkmap(matid,5);
-
-%% =====================================================
-%% Kn and Kt (ANALYTICAL ROTATION)
-%% =====================================================
+K11   = auxkmap(matid,2);
+K12   = auxkmap(matid,3);
+K21   = auxkmap(matid,4);
+K22   = auxkmap(matid,5);
 
 Kn = (K11.*vy.^2 - 2*K12.*vx.*vy + K22.*vx.^2) ./ normv2;
 
+%% ── Flowrate boundary — delega ao benchmark ─────────────────────
+if env.benchmark.temFlowrateBoundary()
 
-%% =====================================================
-%% FLOWRATE BOUNDARY
-%% =====================================================
+    maskT      = bedge(:,5) < 200;
+    h_contorno = nflagface(:,2);
 
-if 430<numcase && numcase<450 && numcase~=436
-    % condicao de contorno de Dirichlet
-    %Se = ones(nelem,1);
-    maskT=  bedge(:,5)<200;
-    h_contorno=nflagface(:,2);
-    % Casos 431, 435 (mesma fórmula)
-    if numcase==437
-        mask = h_contorno <= 0;        % índices onde neg NÃO é positivo
-        coef=env.config.perm(1,2) .* exp(alpha*h_contorno(mask));
-        K11 = auxkmap(matid,2).*(~maskT)+coef;
-        K12 = auxkmap(matid,3);
-        K21 = auxkmap(matid,4);
-        K22 = auxkmap(matid,5).*(~maskT)+coef;
-    elseif numcase==438
-        mask = h_contorno <1;        % índices onde neg NÃO é positivo
-        coef=env.config.perm(lef,2:5) .* (2-h_contorno(mask)).^(-1);
-        K11 = auxkmap(matid,2).*(~maskT)+ coef(:,1);
-        K12 = auxkmap(matid,3).*(~maskT)+ coef(:,2);
-        K21 = auxkmap(matid,4).*(~maskT)+ coef(:,3);
-        K22 = auxkmap(matid,5).*(~maskT)+ coef(:,4);
-    else
-        coef=zeros(length(maskT),1);
-        mask = h_contorno <0; % índices onde neg NÃO é positivo
-        mask1=h_contorno>0;
-        coef(mask)= 35.*(2.99*10^(6)./(2.99*10^(6)+abs(h_contorno(mask)).^5));
-        coef(mask1)= 35;
-
-        K11 = auxkmap(matid,2).*(~maskT)+coef;
-        K12 = auxkmap(matid,3);
-        K21 = auxkmap(matid,4);
-        K22 = auxkmap(matid,5).*(~maskT)+coef;
-    end
-
+    % ajusta K por modelo — substitui if numcase==437/438/else
+    [K11, K12, K21, K22] = env.benchmark.ajustarKContorno(...
+        env, parms, auxkmap, matid, h_contorno, maskT);
 
     Kn = (K11.*vy.^2 - 2*K12.*vx.*vy + K22.*vx.^2) ./ normv2;
 
-    B1 = bedge(:,1);
-    B2 = bedge(:,2);
-    lef = bedge(:,3);
+    B1      = bedge(:,1);
+    B2      = bedge(:,2);
+    lef     = bedge(:,3);
     coordB1 = coord(B1,:);
     coordB2 = coord(B2,:);
 
-    edgevec = coordB1 - coordB2;
-    nor = sqrt(sum(edgevec.^2,2));
+    % norma da aresta — sem vecnorm
+    dB      = coordB1 - coordB2;
+    nor     = sqrt(dB(:,1).^2 + dB(:,2).^2);
 
-    O = centelem(lef,:);
+    O       = centelem(lef,:);
+    c1      = coord(B1,2);
+    c2      = coord(B2,2);
 
-    c1 = coord(B1,2);
-    c2 = coord(B2,2);
+    A1    = -Kn ./ (Hesq .* nv);
+    term1 = sum((O-coordB2).*(coordB1-coordB2),2) .* c1;
+    term2 = sum((O-coordB1).*(coordB2-coordB1),2) .* c2;
 
-    A1 = -Kn ./ (Hesq.* nv);
-    term1 = sum((O-coordB2).*(coordB1-coordB2),2).*c1;
-    term2 = sum((O-coordB1).*(coordB2-coordB1),2).*c2;
+    % TPFA nao tem termo Kt
+    flowrateZ(1:nb,1) = A1 .* (term1 + term2 - (nor.^2).*Centro(:,2));
 
-    flowrateZ(1:nb,1) = A1.*(term1+term2-(nor.^2).*Centro(:,2));
-
-    %---------------------------------------------------------------------
-    % condicao de contorno de Neumann
-    mask201 = bedge(:,5)>200;
+    % Neumann
+    mask201 = bedge(:,5) > 200;
     if any(mask201)
-        if numcase==431 || numcase==432 || numcase==435 || numcase==438 % || numcase==439
-            flowrateZ(mask201)=flowrateZ(mask201,1);
-        end
+        flowrateZ(mask201) = flowrateZ(mask201);
     end
 
-    if numcase==435
-        mask101 = bedge(:,5)==101;
-        flowrateZ(mask101)=-flowrateZ(mask101);
-    end
+    % ajuste especifico do benchmark (ex: inversao caso 435)
+    flowrateZ = env.benchmark.ajustarFlowrate(flowrateZ, bedge);
 
-    flowresultZ = flowresultZ + accumarray(lef,flowrateZ(1:nb),size(flowresultZ));
-
+    flowresultZ = flowresultZ + accumarray(lef, flowrateZ(1:nb), size(flowresultZ));
 end
 
-%% =====================================================
-%% INTERNAL EDGES GEOMETRY
-%% =====================================================
+%% ── Internal edges geometry ──────────────────────────────────────
+C1   = centelem(inedge(:,3),:);
+C2   = centelem(inedge(:,4),:);
+lef  = inedge(:,3);
+rel  = inedge(:,4);
 
-C1 = centelem(inedge(:,3),:);
-C2 = centelem(inedge(:,4),:);
+vd1  = coord(inedge(:,2),:) - coord(inedge(:,1),:);
+vd2  = C2 - coord(inedge(:,1),:);
+ve2  = C1 - coord(inedge(:,1),:);
 
-lef = inedge(:,3);
-rel = inedge(:,4);
-
-vcen = C2 - C1;
-
-vd1 = coord(inedge(:,2),:) - coord(inedge(:,1),:);
-
-vx = vd1(:,1);
-vy = vd1(:,2);
-
-nv = vecnorm(vd1,2,2);
+vx     = vd1(:,1);
+vy     = vd1(:,2);
 normv2 = vx.^2 + vy.^2;
+nv     = sqrt(normv2);                              % substitui vecnorm
 
-vd2 = C2 - coord(inedge(:,1),:);
-
-cd = cross(vd1,vd2,2);
-
-H2 = vecnorm(cd,2,2)./nv;
-
-ve2 = C1 - coord(inedge(:,1),:);
-
-ce = cross(vd1,ve2,2);
-
-H1 = vecnorm(ce,2,2)./nv;
+% cross 2D — so componente Z
+H2 = abs(vx.*vd2(:,2) - vy.*vd2(:,1)) ./ nv;      % substitui cross+vecnorm
+H1 = abs(vx.*ve2(:,2) - vy.*ve2(:,1)) ./ nv;
 
 no1 = coord(inedge(:,1),2);
 no2 = coord(inedge(:,2),2);
 
-%% =====================================================
-%% PERMEABILITY INTERNAL
-%% =====================================================
-
+%% ── Permeabilidade internal ──────────────────────────────────────
 matL = elem(inedge(:,3),5);
 matR = elem(inedge(:,4),5);
 
-K11L = auxkmap(matL,2);
-K12L = auxkmap(matL,3);
-K21L = auxkmap(matL,4);
-K22L = auxkmap(matL,5);
+K11L = auxkmap(matL,2);  K12L = auxkmap(matL,3);
+K21L = auxkmap(matL,4);  K22L = auxkmap(matL,5);
+K11R = auxkmap(matR,2);  K12R = auxkmap(matR,3);
+K21R = auxkmap(matR,4);  K22R = auxkmap(matR,5);
 
-K11R = auxkmap(matR,2);
-K12R = auxkmap(matR,3);
-K21R = auxkmap(matR,4);
-K22R = auxkmap(matR,5);
-
-%% =====================================================
-%% Kn Kt INTERNAL
-%% =====================================================
-
+%% ── Kn internal — TPFA nao usa Kt ───────────────────────────────
 Kn1 = (K11L.*vy.^2 - 2*K12L.*vx.*vy + K22L.*vx.^2) ./ normv2;
-
-
 Kn2 = (K11R.*vy.^2 - 2*K12R.*vx.*vy + K22R.*vx.^2) ./ normv2;
 
+Kde = -nv .* (Kn1.*Kn2) ./ (Kn1.*H2 + Kn2.*H1);
 
-
-%% =====================================================
-%% CONSTANTS INTERNAL
-%% =====================================================
-
-Kde = -nv .* ((Kn1.*Kn2)) ./ (Kn1.*H2 + Kn2.*H1);
-
-
-%% =====================================================
-%% FLOW INTERNAL
-%% =====================================================
-
-if 430<numcase && numcase<450
-
+%% ── Flowrate internal ────────────────────────────────────────────
+if env.benchmark.temFlowrateBoundary()
     idx = nb + (1:ni);
 
-    flowrateZ(idx) = Kde .*(centelem(rel,2)-centelem(lef,2));
+    % TPFA: sem termo Ded (anisotropia nao capturada)
+    flowrateZ(idx) = Kde .* (centelem(rel,2) - centelem(lef,2));
 
     flowresultZ = flowresultZ + ...
-        accumarray(lef,flowrateZ(idx),size(flowresultZ))- ...
-        accumarray(rel,flowrateZ(idx),size(flowresultZ));
-
+        accumarray(lef, flowrateZ(idx), size(flowresultZ)) - ...
+        accumarray(rel, flowrateZ(idx), size(flowresultZ));
 end
 
-premethod.TPFA.Hesq=Hesq;
-premethod.TPFA.Kde=Kde;
-premethod.TPFA.Kn=Kn;
-premethod.TPFA.flowrateZ=flowrateZ;
-premethod.TPFA.flowresultZ=flowresultZ;
-
+%% ── Empacota no env ──────────────────────────────────────────────
+env.premethod.TPFA.Hesq        = Hesq;
+env.premethod.TPFA.Kde         = Kde;
+env.premethod.TPFA.Kn          = Kn;
+env.premethod.TPFA.flowrateZ   = flowrateZ;
+env.premethod.TPFA.flowresultZ = flowresultZ;
 end

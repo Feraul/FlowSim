@@ -1,25 +1,43 @@
-function [M,I]=soil_properties(M,I,parmRichardEq,preMPFAD,env)
+function [M,I]=soil_properties(M,I,parms,flowresultZ,env)
 
 
-elemarea=env.geometry.elemarea;
-flowresultZ=preMPFAD.flowresultZ;
+Area=env.geometry.elemarea;
 
-h_n=parmRichardEq.h_init;
-h_m=parmRichardEq.h_old;
-dt=parmRichardEq.dt;
+h_n=parms.h_init;
+h_m=parms.h_old;
+dt=parms.dt;
+invdt = 1/dt;
 
 %-------------------------------------------------------------------------
-% calcula theta inicial
-theta_n=thetafunction(h_n,parmRichardEq,env); 
-% calcula theta para cada intercao
-theta_m=thetafunction(h_m,parmRichardEq,env); 
-% capacidade de solo para cada iteracao
-dthetadh=SWcapacity(h_m,parmRichardEq,env); 
+% ── versao nova ───────────────────────────────────────────────────
+theta_n  = env.benchmark.calcularTheta(h_n, parms);
+theta_m  = env.benchmark.calcularTheta(h_m, parms);
+dthetadh = env.benchmark.calcularCapacidade(h_m, parms);
 
-diff_theta=theta_m - theta_n;
+% ── versao original ───────────────────────────────────────────────
+%  theta_n_old  = thetafunction(h_n, parms, env);
+%  theta_m_old  = thetafunction(h_m, parms, env);
+%  dthetadh_old = SWcapacity(h_m, parms, env);
+% 
+% % ── compara ───────────────────────────────────────────────────────
+% fprintf('theta_n:  max diff = %.2e\n', max(abs(theta_n_new  - theta_n_old)));
+% fprintf('theta_m:  max diff = %.2e\n', max(abs(theta_m_new  - theta_m_old)));
+% fprintf('dthetadh: max diff = %.2e\n', max(abs(dthetadh_new - dthetadh_old)));
+% fprintf('dthetadh_new: min=%.2e max=%.2e zeros=%d\n', ...
+%     min(dthetadh_new), max(dthetadh_new), sum(dthetadh_new==0));
+% fprintf('dthetadh_old: min=%.2e max=%.2e zeros=%d\n', ...
+%     min(dthetadh_old), max(dthetadh_old), sum(dthetadh_old==0));
 
-M=M+(dt^-1)*diag(dthetadh.*elemarea(:));
+Dtheta=theta_m - theta_n;
 
-I=I+(dt^-1).*diag(dthetadh.*elemarea(:))*h_m-(dt^-1)*diff_theta.*elemarea(:)-flowresultZ;
+coef=invdt.*dthetadh.*Area(:);
 
+M_diag   = M + (dt^-1)*diag(dthetadh.*Area(:));
+M_spdiag = M + spdiags(coef, 0, size(M,1), size(M,2));
+
+fprintf('Diferenca entre diag e spdiags: %.2e\n', norm(M_diag - M_spdiag, 'fro'));
+fprintf('coef: min=%.4e  max=%.4e  zeros=%d\n', min(coef), max(coef), sum(coef==0));
+
+I=I+(dt^-1).*(diag(dthetadh.*Area(:))*h_m-Dtheta.*Area(:))-flowresultZ;
+%I = I + invdt .* (coef .* h_m - Dtheta.*Area(:)) - flowresultZ;
 end

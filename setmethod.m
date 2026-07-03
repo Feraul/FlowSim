@@ -1,111 +1,107 @@
-
-%Programer: Fernando Contreras, 2021
 %--------------------------------------------------------------------------
-%Goals: this FUNCTION maneger the kind of pressure, headr hydraulic,
-% solute concentration, water saturation solver
+% setmethod — Gerenciador do tipo de simulacao
+%
+% Seleciona e executa o solver adequado de acordo com env.config.phasekey:
+%
+%   phasekey = 1 → Escoamento monofasico (One-phase flow)
+%   phasekey = 4 → Carga hidraulica (Groundwater / Hydraulic head)
+%   phasekey = 5 → Transporte de contaminante com carga hidraulica
+%   phasekey = 6 → Equacao de Richards (zona saturada e nao saturada)
+%
+% Observacoes:
+%   - env.premethod e env.preGravity ja estao populados (via preprocessmethod)
+%   - parms contem todos os parametros fisicos (h_init, dt, theta_s...)
+%   - preprocessmethod NAO e chamado aqui — ja foi executado no main
+%
+% Entradas:
+%   source_wells — pocos injetores/produtores (definidos por sim.definirFontes)
+%   keywrite     — flag de escrita de VTK ('i' = escreve, outros = nao)
+%   invh         — flag de inversao de h para pos-processamento
+%   env          — estrutura global (geometria, config, benchmark, metodo...)
+%   parms        — parametros fisicos do caso
 %--------------------------------------------------------------------------
-%Additional comments:
-%--------------------------------------------------------------------------
+function setmethod(source_wells, keywrite, invh, env, parms)
 
-function setmethod(source_wells,keywrite,invh,env,parmconcentra,...
-                   parmgroundwater, parmRichardEq)
-
-%Get a preprocessment of pressure scheme (used in One-phase and Two-Phase).
-if env.config.phasekey ~= 0
-    %Call "preMPFA". This function calculate some important parameters to
-    %be used in any PRESSURE solver.
-    [env,premethod, preGravity,parmRichardEq] = ...
-        preprocessmethod(env,parmRichardEq);
-
-end  %End of IF (execute "preMPFA")
-env.config.phasekey = env.config.phasekey;
-
-%According "phasekey" the "One-phase" or "Two-phase" procedures are choose.
 switch env.config.phasekey
+
+    %% ── Caso 1: Escoamento monofasico (One-phase flow) ──────────
+    % Resolve o sistema linear estacionario A*p = b uma unica vez
+    % e exibe os extremos de pressao no console
     case 1
-        pmethod=env.config.pmethod;
-        solvers = struct( ...
-            'tpfa',   @( ) solvePressure_TPFA(preMPFAD), ...
-            'mpfad',  @( ) ferncodes_solverpressure(env,preMPFAD,parmRichardEq,0,source_wells,0), ...
-            'mpfaql', @( ) ferncodes_solverpressureMPFAQL(nflag,parameter,kmap,weightDMP,wells,1,V,1,N,weight,s), ...
-            'mpfah',  @( ) ferncodes_solverpressureMPFAH(nflagface,parameter,weightDMP,wells,SS,dt,h_init,MM,gravrate,P), ...
-            'nlfvpp', @( ) ferncodes_solverpressureNLFVPP(nflagno,parameter,kmap,wells,1,V,1,N,p_old,contnorm), ...
-            'nlfvh',  @( ) ferncodes_solverpressureNLFVH(nflagface,parameter,kmap,wells,1,weightDMP,p_old,contnorm), ...
-            'nlfvdmp',@( ) ferncodes_solverpressureDMP(nflagface,parameter,wells,1,weightDMP,p_old,0,0,0) ...
-            );
+        [pressure, flowrate] = env.metodo.resolver(env, env.premethod, ...
+            parms, parms.h_init, parms.dt, 0);
 
-        if isfield(solvers, pmethod)
-            [pressure, flowrate] = solvers.(pmethod)();
-        else
-            [pressure, flowrate] = solvePressure(transmvecleft,transmvecright,knownvecleft, ...
-                knownvecright,storeinv,Bleft,Bright,wells,mapinv,maptransm, ...
-                mapknownvec,pointedge,1,bodyterm);
-        end
+        disp('>> One-phase extrema:');
         max(pressure)
-        min(pressure) 
-        postprocessor(pressure,flowrate,0, 0,env,1,parmRichardEq)
-    case 4 % hydraulic head simulation
-        %% ===========================================================
-        % steady-state problem
-        if ismember(env.config.numcase, [336, 334, 335,337,338,339,340,341,347,341.1])
-            solvers = struct( ...
-                'tpfa',   @( ) solvePressure_TPFA(preTPFA), ...
-                'mpfad',  @( ) ferncodes_solverpressure(env,preMPFAD, preconcentraMPFAD, parmconcentra, parmgroundwater, preGravity), ...
-                'mpfaql', @( ) ferncodes_solverpressureMPFAQL(env,preMPFAQL), ...
-                'mpfah',  @( ) ferncodes_solverpressureMPFAH(env,preMPFAH, parmgroundwater, preGravity), ...
-                'nlfvpp', @( ) ferncodes_solverpressureNLFVPP(env, preNLTPFA));
-            time=0;
-            % Verifica se o m�todo existe na tabela
-            if isfield(solvers, env.config.pmethod)
-                [pressure, flowrate] = solvers.(env.config.pmethod)();
-            end
-            %Plot the fields (pressure, normal velocity, etc)
-            %This function create the "*.vtk" file used in VISIT to
-            %postprocessing the results
-            postprocessor(pressure,flowrate,0,1,1,overedgecoord,1,keywrite,...
-                invh,normk,0);
-            
-            if env.config.numcase==333
-                plotandwrite(0,0,pressure,0,0,0,0,0,overedgecoord);
+        min(pressure)
+
+        % salva VTK com campo de pressao e flowrate
+        postprocessor(pressure, flowrate, 0, 0, env, 1, parms);
+
+    %% ── Caso 4: Carga hidraulica (Groundwater) ───────────────────
+    case 4
+
+        if ismember(env.config.numcase, [336,334,335,337,338,339,340,341,347,341.1])
+            %% Estado estacionario
+            % Resolve o sistema linear A*h = b uma unica vez (sem loop temporal)
+            % Usado para aquiferos confinados com BC fixas no tempo
+            [pressure, flowrate] = env.metodo.resolver(env, env.premethod, ...
+                parms, parms.h_init, parms.dt, 0);
+
+            % pos-processamento: salva VTK com campo de carga hidraulica
+            postprocessor(pressure, flowrate, 0, 1, 1, ...
+                parms.overedgecoord, 1, keywrite, invh, env.config.normk, 0);
+
+            % caso 333: exporta tambem para plotandwrite (comparacao com analitico)
+            if env.config.numcase == 333
+                plotandwrite(0, 0, pressure, 0, 0, 0, 0, 0, parms.overedgecoord);
             end
 
-            %Mesage for the user:
             disp('------------------------------------------------');
             disp('>> Global hydraulic head extrema values:');
             max_conval = max(pressure)
             min_conval = min(pressure)
 
         else
-            %% ===============================================================
-            % transient-state problem
-            hydraulic(wells,parmRichardEq);
+            %% Estado transiente
+            % Loop temporal completo para aquiferos com BC ou K variaveis no tempo
+            % ex: casos 342, 343 (carga hidraulica transiente)
+            hydraulic(source_wells, parms);
         end
 
-    case 5 % contaminant transport with hydarulic head
-        tempo=0;
-        %Define elements associated to INJECTOR and PRODUCER wells.
-        [injecelem,producelem,satinbound,Con,wellsc] = wellsparameter(wellsc,...
-            Con,klb);
+    %% ── Caso 5: Transporte de contaminante com carga hidraulica ──
+    % Resolve o sistema acoplado IMHEC (Implicit Method for
+    % Hydraulic head and Contaminant transport):
+    %   1. Define elementos de injec/producao e saturacao nos contornos
+    %   2. Identifica vertices/faces com saturacao conhecida (flagknownedge)
+    %   3. Pre-processa a equacao de saturacao (preSaturation)
+    %   4. Chama IMHEC que resolve h e C de forma acoplada
+    case 5
+        % define pocos e saturacao nos contornos
+        [injecelem, producelem, satinbound, Con, wellsc] = ...
+            wellsparameter(parms.wellsc, parms.Con, parms.klb);
 
-        %Define flags and known concentration or saturation on the vertices and edges.
-        [satonvertices,satonedges,flagknownvert,flagknownedge] = ...
-            getsatandflag(satinbound,injecelem,Con,nflagnoc,nflagfacec,0);
+        % identifica vertices e faces com saturacao/concentracao conhecida
+        [~, ~, ~, flagknownedge] = getsatandflag(satinbound, injecelem, ...
+            Con, env.config.nflag, env.config.nflagface, 0);
 
-        %"precsaturation" - Preprocessor of the concentration or saturation equation
-        [wvector,wmap,constraint,massweigmap,othervertexmap,lsw,swsequence,...
-            ntriang,areatriang,prodwellbedg,prodwellinedg,mwmaprodelem,...
-            vtxmaprodelem,coordmaprodelem,amountofneigvec,rtmd_storepos,...
-            rtmd_storeleft,rtmd_storeright,isonbound] = ...
-            preSaturation(flagknownedge,injecelem,producelem);
+        % pre-processamento da equacao de saturacao (triangulacao, pesos...)
+        [~,~,~,~,~,~,~,~,~,~,~,~,~,~,~,~,~,~,isonbound] = ...
+            preSaturation(flagknownedge, injecelem, producelem);
 
-        %"IMHEC" function. There, HYDRAULIC HEAD and CONCENTRATION are solved.
-        IMHEC(wells,keywrite,invh,env,parmconcentra,env,preTPFA,preMPFAD,...
-            preMPFAQL,preNLTPFA, preMPFAH,presturation,parmRichardEq);
+        % resolve sistema acoplado carga hidraulica + concentracao
+        IMHEC(source_wells, keywrite, invh, env, parms);
+
+    %% ── Caso 6: Equacao de Richards (zona saturada e nao saturada) ─
+    % Loop temporal nao-linear completo:
+    %   - Linearizacao por Picard a cada passo de tempo
+    %   - Atualizacao de K(h), theta(h) e capacidade hidrica C(h)
+    %   - Criterio de parada por tempo final ou criterio especial do benchmark
     case 6
-        %% ===============================================================
-        % transient-state problem
-        hydraulic_RE(env,premethod,parmRichardEq,source_wells);
-end  %End of SWITCH
+        hydraulic_RE(env, parms, source_wells);
+
+    otherwise
+        error('setmethod: phasekey %d nao reconhecido.', env.config.phasekey);
+
 end
-
-
+end

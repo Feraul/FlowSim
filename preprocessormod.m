@@ -470,6 +470,10 @@ geometry.elemarea     = elemarea;
 geometry.klb          = klb;
 
 env.config=config;
+% dentro de preprocessormod — ao ler o Start.dat
+if env.config.numcase >400   % casos Richards
+    env.config.numcase = env.config.numcase + 30;
+end
 env.geometry=geometry;
 env.mainpathfolders=mainpathfolders;
 end
@@ -713,6 +717,7 @@ config.totaltime=getValue();
 bb=getValue();
 [M]= nextMatrixAuto(lines(1:i+(bb-1)),i);
 config.bcflag=M;
+
 end
 
 %--------------------------------------------------------------------------

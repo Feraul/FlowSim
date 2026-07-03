@@ -1,311 +1,223 @@
-function [premethod,weight,s] = ferncodes_Pre_LPEW_2_vect(premethod,parmRichardEq,env)
-auxnumcase = env.config.numcase;
+function [env,weight,s] = ferncodes_Pre_LPEW_2_vect(env,parms)
 
-if auxnumcase > 400
-    kmap = parmRichardEq.auxperm;
+if env.config.numcase > 400
+    kmap = parms.auxperm;
 else
     kmap = env.config.perm;
 end
 
 coord = env.geometry.coord;
 elem  = env.geometry.elem;
-
-ns1 = env.geometry.nsurn1;
-ns2 = env.geometry.nsurn2;
-
-es1 = env.geometry.esurn1;
-es2 = env.geometry.esurn2;
-N=premethod.MPFAD.N;
+ns1   = env.geometry.nsurn1;
+ns2   = env.geometry.nsurn2;
+es1   = env.geometry.esurn1;
+es2   = env.geometry.esurn2;
+N     = env.premethod.MPFAD.N;
 
 nNodes = size(coord,1);
+apw    = ones(nNodes+1,1);
+r      = zeros(nNodes,2);
+s      = zeros(nNodes,1);
+weight = zeros(1,20*nNodes);
 
-apw = ones(nNodes+1,1);
-r   = zeros(nNodes,2);
-s   = 0;
-
-weight = zeros(1,20*nNodes); % tamanho seguro
-R = [0 1 0; -1 0 0; 0 0 0];
-% vetor de pontos na vizinhança do nó "ni".
-
-%% -------------------------------------------------
-% Loop sobre nós
-%% -------------------------------------------------
+%% ── Pre-calcula centroide de cada elemento uma vez ───────────────
+isQuad  = elem(:,4) ~= 0;
+nvert   = 3 + isQuad;
+centpre = zeros(size(elem,1),2);
+for jj = 1:4
+    mask = jj <= nvert;
+    centpre(mask,1) = centpre(mask,1) + coord(elem(mask,jj),1)./nvert(mask);
+    centpre(mask,2) = centpre(mask,2) + coord(elem(mask,jj),2)./nvert(mask);
+end
+sum_lambda_all = zeros(nNodes,1);
+%% ── Loop sobre nos ───────────────────────────────────────────────
 for y = 1:nNodes
-    No = y;
-    Qo = coord(No,:);
-    P=zeros(ns2(No+1)-ns2(No),3);
-    T=zeros(ns2(No+1)-ns2(No),3);
-    O=zeros(es2(No+1)-es2(No),3);
-    nec=size(O,1);
-    for i=1:size(P,1),
-        P(i,:)=coord(ns1(ns2(No)+i),:);
-        T(i,:)=(P(i,:)+Qo)/2;
-        % aloca o flag da da aresta ou face pertence ao contorno
-    end
+    No  = y;
+    Qox = coord(No,1);
+    Qoy = coord(No,2);
+    Qo  = [Qox Qoy 0];
 
-    %Construção do vetor O, dos centróides (pontos de colocação) dos elementos%
-    %que concorrem no nó ni.                                                  %
+    nns = ns2(No+1) - ns2(No);
+    nec = es2(No+1) - es2(No);
 
-    for i=1:size(O,1),
-        %Verifica se o elemento é um quadrilátero ou um triângulo.
-        if elem(es1(es2(No)+i),4)==0 % lenbrando que o quarta columna
-            b=3;
+    % ── P e T ─────────────────────────────────────────────────────
+    P = zeros(nns,3);
+    T = zeros(nns,3);
+    ns_idx = ns2(No)+1 : ns2(No+1);
+    P(:,1:2) = coord(ns1(ns_idx),1:2);
+    T(:,1:2) = 0.5*(P(:,1:2) + Qo(1:2));
+
+    % ── O — usa centpre pre-calculado ─────────────────────────────
+    O = zeros(nec,3);
+    es_idx = es2(No)+1 : es2(No+1);
+    O(:,1:2) = centpre(es1(es_idx),:);
+
+    %% ── Angulos ──────────────────────────────────────────────────
+    ve1    = zeros(1,nec);
+    ve2    = zeros(1,nec);
+    theta1 = zeros(1,nec);
+    theta2 = zeros(1,nec);
+
+    for k = 1:nec
+        v0 = O(k,1:2) - Qo(1:2);
+        if k == nec && nns == nec
+            vetor1   = T(1,1:2)   - T(k,1:2);
+            vetorth2 = T(1,1:2)   - Qo(1:2);
         else
-            b=4;  % da matriz de elementos é para quadrilateros
+            vetor1   = T(k+1,1:2) - T(k,1:2);
+            vetorth2 = T(k+1,1:2) - Qo(1:2);
         end
-        %Carrega adequadamente o vetor O (braicentro de cada elemento)
-        for j=1:b
-            O(i,1)=O(i,1)+(coord(elem(es1(es2(No)+i),j),1)/b);
-            O(i,2)=O(i,2)+(coord(elem(es1(es2(No)+i),j),2)/b);
-            O(i,3)=O(i,3)+(coord(elem(es1(es2(No)+i),j),3)/b);
-        end
-    end
-    %% -------------------------------------------------
-    % Vetores para ângulos
-    %% -------------------------------------------------
-    ve2=zeros(1,es2(No+1)-es2(No));
-    ve1=zeros(1,es2(No+1)-es2(No));
-    theta2=zeros(1,es2(No+1)-es2(No));
-    theta1=zeros(1,es2(No+1)-es2(No));
+        vetorth1 = T(k,1:2) - Qo(1:2);
 
+        nv1 = norm(vetor1);   nvh1 = norm(vetorth1);
+        nv2 = norm(vetorth2); nv0  = norm(v0);
 
-    for k=1:size(ve2,2),
-        %Determinação dos vetores necessários à obtenção dos cossenos:
-        v0=O(k,:)-Qo;
-        if (k==size(ve2,2))&&(size(P,1)==size(O,1))
-            vetorth2=T(1,:)-Qo;
-            vetor1=T(1,:)-T(k,:);
-        else
-            vetor1=T(k+1,:)-T(k,:);
-            vetorth2=T(k+1,:)-Qo;
-        end
-        vetorth1=T(k,:)-Qo;
-        ve1(k)=acos(dot(-vetorth1,vetor1)/(norm(vetor1)*norm(vetorth1))); % revisar esses signos
-        ve2(k)=acos(dot(-vetorth2,-vetor1)/(norm(vetor1)*norm(vetorth2)));
-        theta2(k)=acos(dot(v0,vetorth2)/(norm(v0)*norm(vetorth2)));
-        theta1(k)=acos(dot(v0,vetorth1)/(norm(v0)*norm(vetorth1)));
+        ve1(k)    = acos(max(-1,min(1, dot(-vetorth1,vetor1)  /(nv1*nvh1) )));
+        ve2(k)    = acos(max(-1,min(1, dot(-vetorth2,-vetor1) /(nv1*nv2)  )));
+        theta1(k) = acos(max(-1,min(1, dot(v0,vetorth1)       /(nv0*nvh1) )));
+        theta2(k) = acos(max(-1,min(1, dot(v0,vetorth2)       /(nv0*nv2)  )));
     end
 
-    %% -------------------------------------------------
-    % Vetores netas
-    %% -------------------------------------------------
+    %% ── Netas — cross 2D (componente Z) sem cross() ─────────────
     netas = zeros(nec,2);
 
-    if size(P,1) == size(O,1)
-        % Nó interno (vectorizado)
-        v1 = O - Qo;
-        v2 = P - Qo;
-        ce = cross(v1,v2,2);
-        h1 = vecnorm(ce,2,2)./vecnorm(v2,2,2);
-        netas(:,1) = vecnorm(T-Qo,2,2)./h1;
+    if nns == nec   % no interno
+        v1x = O(:,1) - Qox;   v1y = O(:,2) - Qoy;
+        v2x = P(1:nec,1) - Qox; v2y = P(1:nec,2) - Qoy;
 
-        Pshift = [P(2:end,:); P(1,:)];
-        Tshift = [T(2:end,:); T(1,:)];
-        v2 = Pshift - Qo;
-        ce = cross(v1,v2,2);
-        h2 = vecnorm(ce,2,2)./vecnorm(v2,2,2);
-        netas(:,2) = vecnorm(Tshift-Qo,2,2)./h2;
-    else
-        % Nó de contorno (loop)
+        % cross 2D: |v1 x v2| = |v1x*v2y - v1y*v2x|
+        h1 = abs(v1x.*v2y - v1y.*v2x) ./ sqrt(v2x.^2 + v2y.^2);
+
+        Tx = T(1:nec,1) - Qox;   Ty = T(1:nec,2) - Qoy;
+        netas(:,1) = sqrt(Tx.^2 + Ty.^2) ./ h1;
+
+        Psx = [P(2:nec,1); P(1,1)] - Qox;
+        Psy = [P(2:nec,2); P(1,2)] - Qoy;
+        h2  = abs(v1x.*Psy - v1y.*Psx) ./ sqrt(Psx.^2 + Psy.^2);
+
+        Tsx = [T(2:nec,1); T(1,1)] - Qox;
+        Tsy = [T(2:nec,2); T(1,2)] - Qoy;
+        netas(:,2) = sqrt(Tsx.^2 + Tsy.^2) ./ h2;
+
+    else   % no de contorno
         for k = 1:nec
-            v1c = O(k,:) - Qo;
-            v2c = P(k,:) - Qo;
-            ce = cross(v1c,v2c);
-            h1 = norm(ce)/norm(v2c);
-            netas(k,1) = norm(T(k,:) - Qo)/h1;
+            v1x = O(k,1)-Qox;  v1y = O(k,2)-Qoy;
+            v2x = P(k,1)-Qox;  v2y = P(k,2)-Qoy;
+            h1  = abs(v1x*v2y - v1y*v2x) / sqrt(v2x^2+v2y^2);
+            Tkx = T(k,1)-Qox;  Tky = T(k,2)-Qoy;
+            netas(k,1) = sqrt(Tkx^2+Tky^2) / h1;
 
-            if k==nec
-                v2c = P(end,:) - Qo;
-                tvec = T(end,:) - Qo;
+            if k == nec
+                v2x2 = P(end,1)-Qox; v2y2 = P(end,2)-Qoy;
+                tvx  = T(end,1)-Qox; tvy  = T(end,2)-Qoy;
             else
-                v2c = P(k+1,:) - Qo;
-                tvec = T(k+1,:) - Qo;
+                v2x2 = P(k+1,1)-Qox; v2y2 = P(k+1,2)-Qoy;
+                tvx  = T(k+1,1)-Qox; tvy  = T(k+1,2)-Qoy;
             end
-            ce = cross(v1c,v2c);
-            h2 = norm(ce)/norm(v2c);
-            netas(k,2) = norm(tvec)/h2;
+            h2 = abs(v1x*v2y2 - v1y*v2x2) / sqrt(v2x2^2+v2y2^2);
+            netas(k,2) = sqrt(tvx^2+tvy^2) / h2;
         end
     end
 
-    %% -------------------------------------------------
-    % Tensores Kn1, Kt1, Kn2, Kt2
-    %% -------------------------------------------------
+    %% ── Tensores Kn1, Kt1, Kn2, Kt2 — R*v = [-vy, vx] ─────────
+    % R = [0 1; -1 0] em 2D → R*[x;y] = [-y; x]
+    Kn1 = zeros(nec,2);
+    Kt1 = zeros(nec,2);
+    Kn2 = zeros(nec,1);
+    Kt2 = zeros(nec,1);
 
-    Kt1=zeros(nec,2); %As colunas representam i=1 e i=2.
-    Kt2=zeros(nec,1);
-    Kn1=zeros(nec,2);
-    Kn2=zeros(nec,1);
-    K=zeros(3);
-    R=[0 1 0; -1 0 0; 0 0 0];
-    %Construção do tensor permeabilidade.%
+    % pre-indexa K para todos os elementos do no
+    jj_all  = es1(es2(No)+1:es2(No+1));
+    matids  = elem(jj_all,5);
+    K11v = kmap(matids,2);
+    K12v = kmap(matids,3);
+    K21v = kmap(matids,4);
+    K22v = kmap(matids,5);
 
-    %Cálculo das primeiras constantes, para todas as células que concorrem num
-    %vertice "No".
-    for k=1:nec
-        % elemento j
-        j=es1(es2(No)+k);
-        % permeabilidade
-        K(1,1)=kmap(elem(j,5),2);
-        K(1,2)=kmap(elem(j,5),3);
-        K(2,1)=kmap(elem(j,5),4);
-        K(2,2)=kmap(elem(j,5),5);
-        for i=1:2
-            if (size(T,1)==size(O,1))&&(k==nec)&&(i==2)
-                Kn1(k,i)=((R*(T(1,:)-Qo)')'*K*(R*(T(1,:)-Qo)'))/norm(T(1,:)-Qo)^2;
-                Kt1(k,i)=((R*(T(1,:)-Qo)')'*K*(T(1,:)-Qo)')/norm(T(1,:)-Qo)^2;
+    for k = 1:nec
+        K11 = K11v(k); K12 = K12v(k); K21 = K21v(k); K22 = K22v(k);
+
+        for i = 1:2
+            if nns == nec && k == nec && i == 2
+                Tv = T(1,1:2) - Qo(1:2);
             else
-                Kn1(k,i)=((R*(T(k+i-1,:)-Qo)')'*K*(R*(T(k+i-1,:)-Qo)'))/norm(T(k+i-1,:)-Qo)^2;
-                Kt1(k,i)=((R*(T(k+i-1,:)-Qo)')'*K*(T(k+i-1,:)-Qo)')/norm(T(k+i-1,:)-Qo)^2;
+                Tv = T(k+i-1,1:2) - Qo(1:2);
             end
+            % R*Tv = [-Tv(2), Tv(1)]
+            Rx = -Tv(2);  Ry = Tv(1);
+            n2 = Tv(1)^2 + Tv(2)^2;
+            Kn1(k,i) = (Rx*(K11*Rx + K12*Ry) + Ry*(K21*Rx + K22*Ry)) / n2;
+            Kt1(k,i) = (Rx*(K11*Tv(1)+K12*Tv(2)) + Ry*(K21*Tv(1)+K22*Tv(2))) / n2;
         end
-        %------------------------- Tensores ----------------------------------%
-        if (size(T,1)==size(O,1))&&(k==nec)
-            %------------ Calculo dos K's internos no elemento ---------------%
-            Kn2(k)=((R*(T(1,:)-T(k,:))')'*K*(R*(T(1,:)-T(k,:))'))/norm(T(1,:)-T(k,:))^2;
-            Kt2(k)=((R*(T(1,:)-T(k,:))')'*K*(T(1,:)-T(k,:))')/norm(T(1,:)-T(k,:))^2;
 
+        % Kn2, Kt2 — entre T(k) e T(k+1)
+        if nns == nec && k == nec
+            dT = T(1,1:2) - T(k,1:2);
         else
-            Kn2(k)=(R*(T(k+1,:)-T(k,:))')'*K*(R*(T(k+1,:)-T(k,:))')/norm(T(k+1,:)-T(k,:))^2;
-            Kt2(k)=((R*(T(k+1,:)-T(k,:))')'*K*(T(k+1,:)-T(k,:))')/norm(T(k+1,:)-T(k,:))^2;
-
+            dT = T(k+1,1:2) - T(k,1:2);
         end
+        Rx  = -dT(2);  Ry = dT(1);
+        n2  = dT(1)^2 + dT(2)^2;
+        Kn2(k) = (Rx*(K11*Rx+K12*Ry) + Ry*(K21*Rx+K22*Ry)) / n2;
+        Kt2(k) = (Rx*(K11*dT(1)+K12*dT(2)) + Ry*(K21*dT(1)+K22*dT(2))) / n2;
     end
 
-    %% -------------------------------------------------
-    % Cálculo de lambda
-    %% -------------------------------------------------
-    %Determina os lambdas.
-    nec=size(O,1);
-    lambda=zeros(nec,1);
-    % see eq 26 of the article: "A linearity-preserving cell-centered scheme for the heterogeneous
-    %and anisotropic diffusion equations on general meshes" DOI: 10.1002/fld
-    if size(P,1)==size(O,1) %Se for um nó interno.
-        for k=1:nec,
-            if (k==1)&&(size(P,1)==size(O,1))
-                zetan=Kn2(nec)*cot(ve1(nec))+Kn2(k)*cot(ve2(k))+Kt2(nec)-Kt2(k);
-                zetad=Kn1(nec,2)*cot(theta2(nec))+Kn1(k,1)*cot(theta1(k)) ...
-                    -Kt1(nec,2)+Kt1(k,1);
+    %% ── Lambda ───────────────────────────────────────────────────
+    lambda = zeros(nec,1);
+    zeta   = zeros(nec+1,1);
+
+    if nns == nec   % no interno — shift vetorizado
+        km1 = [nec, 1:nec-1];
+        cve1 = cot(ve1);  cve2 = cot(ve2);
+        cth1 = cot(theta1); cth2 = cot(theta2);
+
+        zetan = Kn2(km1).*cve1(km1)' + Kn2.*cve2' + Kt2(km1) - Kt2;
+        zetad = Kn1(km1,2).*cth2(km1)' + Kn1(:,1).*cth1' - Kt1(km1,2) + Kt1(:,1);
+        zeta(1:nec) = zetan ./ zetad;
+
+        kp1 = [2:nec, 1];
+        lambda = zeta(1:nec).*Kn1(:,1).*netas(:,1) + ...
+                 zeta(kp1)  .*Kn1(:,2).*netas(:,2);
+
+    else   % no de contorno
+        for k = 1:nec+1
+            if k == 1
+                zetan = Kn2(k)*cot(ve2(k)) - Kt2(k);
+                zetad = Kn1(k,1)*cot(theta1(k)) + Kt1(k,1);
+                r(No,1) = (1+zetan/zetad) * sqrt((Qox-T(1,1))^2+(Qoy-T(1,2))^2);
+            elseif k == nec+1
+                zetan = Kn2(k-1)*cot(ve1(k-1)) + Kt2(k-1);
+                zetad = Kn1(k-1,2)*cot(theta2(k-1)) - Kt1(k-1,2);
+                Tnp1x = T(min(nec+1,end),1); Tnp1y = T(min(nec+1,end),2);
+                r(No,2) = (1+zetan/zetad) * sqrt((Qox-Tnp1x)^2+(Qoy-Tnp1y)^2);
             else
-                zetan=Kn2(k-1)*cot(ve1(k-1))+Kn2(k)*cot(ve2(k))+Kt2(k-1)-Kt2(k);
-                zetad=Kn1(k-1,2)*cot(theta2(k-1))+Kn1(k,1)*cot(theta1(k)) ...
-                    -Kt1(k-1,2)+Kt1(k,1);
+                zetan = Kn2(k-1)*cot(ve1(k-1)) + Kn2(k)*cot(ve2(k)) + Kt2(k-1) - Kt2(k);
+                zetad = Kn1(k-1,2)*cot(theta2(k-1)) + Kn1(k,1)*cot(theta1(k)) ...
+                      - Kt1(k-1,2) + Kt1(k,1);
             end
-            zeta(k)=zetan/zetad;
-            zetaaux(k)= zetan/zetad;
+            zeta(k) = zetan/zetad;
         end
-    else %Se for um nó do contorno.
-        for k=1:nec+1,
-            if (k==1)&&(size(P,1)~=size(O,1))
-                zetan=Kn2(k)*cot(ve2(k))-Kt2(k);
-                zetad=Kn1(k,1)*cot(theta1(k))+Kt1(k,1);
-                %r(No,1)=1+ (zetan/zetad);
-                % comentei porque ja coloquei a norma em Pre_LPEW2 linha 55
-                r(No,1)=(1+ (zetan/zetad))*norm(Qo-T(1,:));
-                normfaceaux1=norm(Qo-T(1,:));
-            elseif (k==nec+1)&&(size(P,1)~=size(O,1))
-                zetan=Kn2(k-1)*cot(ve1(k-1))+Kt2(k-1);
-                zetad=Kn1(k-1,2)*cot(theta2(k-1))-Kt1(k-1,2);
-                %r(No,2)=1+(zetan/zetad);
-                % comentei porque ja coloquei a norma em Pre_LPEW2 linha 55
-                r(No,2)=(1+(zetan/zetad))*norm(Qo-T(nec+1,:));
-              normfaceaux2=norm(Qo-T(nec+1,:));
+        for k = 1:nec
+            if k == nec
+                lambda(k) = zeta(k)*Kn1(k,1)*netas(k,1) + zeta(1)*Kn1(k,2)*netas(k,2);
             else
-                zetan=Kn2(k-1)*cot(ve1(k-1))+Kn2(k)*cot(ve2(k))+Kt2(k-1)-Kt2(k);
-                zetad=Kn1(k-1,2)*cot(theta2(k-1))+Kn1(k,1)*cot(theta1(k)) ...
-                    -Kt1(k-1,2)+Kt1(k,1);
+                lambda(k) = zeta(k)*Kn1(k,1)*netas(k,1) + zeta(k+1)*Kn1(k,2)*netas(k,2);
             end
-            zeta(k)=zetan/zetad;
-        end
-    end
-    % see eq 25 of the article: "A linearity-preserving cell-centered scheme for the heterogeneous
-    %and anisotropic diffusion equations on general meshes" DOI: 10.1002/fld
-    for k=1:nec
-        if (k==nec)&&(size(P,1)==size(O,1))
-            lambda(k)=zeta(k)*Kn1(k,1)*netas(k,1) + zeta(1)*Kn1(k,2)*netas(k,2);
-
-        else
-            lambda(k)=zeta(k)*Kn1(k,1)*netas(k,1) + zeta(k+1)*Kn1(k,2)*netas(k,2);
-
         end
     end
 
-    %% -------------------------------------------------
-    % Cálculo de pesos
-    %% -------------------------------------------------
-    lambda = lambda(:);          % garante vetor coluna
-    lambda = lambda(1:nec);      % evita incompatibilidade
-    wloc = lambda / sum(lambda); % pesos normalizados
+    %% ── Pesos ────────────────────────────────────────────────────
+    lambda = lambda(1:nec);
+    sl     = sum(lambda);
+    wloc   = lambda / sum(lambda);
     weight(1,apw(y):apw(y)+nec-1) = wloc;
-
     apw(y+1) = apw(y) + nec;
-    %% -------------------------------------------------
-    % Atualiza apw
-    %% -------------------------------------------------
-    apw(No + 1) = apw(No) + size(O,1);
-
-    %% -------------------------------------------------
-    % Interpolação das pressões nos contornos de Neumann
-    %% -------------------------------------------------
-    if env.config.numcase == 341
-        % Vetores locais
-        vetor = env.geometry.nsurn1(ns2(No)+1:ns2(No+1));
-        face1 = N(No,1);
-        face2 = N(No,length(vetor));
-
-        % Verifica se o nó pertence ao contorno de Neumann
-        if 200 < nflag(No,1) && nflag(No,1) < 300
-            % Face comp1
-            if env.geometry.bedge(face1,5) > 200
-                a = env.config.bcflag(:,1) == env.geometry.bedge(face1,5);
-                s1 = find(a == 1);
-                aa = 0.5*(coord(env.geometry.bedge(face1,1),:) + coord(env.geometry.bedge(face1,2),:));
-                auxkmap = ferncodes_K(aa(1), aa(2));
-                aux1 = r(No,1)*auxkmap(1)*nflagface(s1,2);
-            else
-                aux1 = 0;
-            end
-
-            % Face comp2
-            if env.geometry.bedge(face2,5) > 200
-                b = env.config.bcflag(:,1) == env.geometry.bedge(face2,5);
-                s2 = find(b == 1);
-                aaa = 0.5*(coord(env.geometry.bedge(face2,1),:) + coord(env.geometry.bedge(face2,2),:));
-                auxkmap = ferncodes_K(aaa(1), aaa(2));
-                aux2 = r(No,2)*auxkmap(1)*nflagface(s2,2);
-            else
-                aux2 = 0;
-            end
-
-            s(No,1) = -(1/sum(lambda))*(aux1 + aux2);
-        end
-    else
-        % Caso numcase ≠ 341
-        vetor = env.geometry.nsurn1(ns2(No)+1:ns2(No+1));
-        face1 = N(No,1);
-        face2 = N(No,length(vetor));
-        MM = env.geometry.bedge(:,1) == No;
-        MMM = find(MM==1);
-
-        if face1 <= size(env.geometry.bedge,1) && face2 <= size(env.geometry.bedge,1) && 200 < env.geometry.bedge(MMM,4)
-            a = env.config.bcflag(:,1) == env.geometry.bedge(face1,5);
-            s1 = find(a == 1);
-
-            flux1=env.config.bcflag(s1,2);
-            b = env.config.bcflag(:,1) == env.geometry.bedge(face2,5);
-            s2 = find(b == 1);
-            flux2=env.config.bcflag(s2,2);
-
-            s(No,1) = -(1/sum(lambda))*(r(No,1)*flux1 + r(No,2)*flux2);
-        end
-    end
+    % guarda sum_lambda 
+    sum_lambda_all(y) = sl;
 end
-
-%% -------------------------------------------------
-% Saídas
-%% -------------------------------------------------
+s = env.benchmark.calcularTermoNeumannVet(r, sum_lambda_all, N, env);
+%% ── Saidas ───────────────────────────────────────────────────────
 weight = weight(weight ~= 0);
-premethod.MPFAD.weight = weight(1,1:apw(nNodes+1)-1);
-premethod.MPFAD.s = s;
-
+env.premethod.MPFAD.weight = weight(1,1:apw(nNodes+1)-1);
+env.premethod.MPFAD.s      = s;
 end
-

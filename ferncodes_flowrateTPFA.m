@@ -1,4 +1,5 @@
-function [flowrate,flowresult,flowratedif,faceaux]=ferncodes_flowrateTPFA(p,premethod,parmRichardEq,env)
+function [flowrate,flowresult,flowratedif,faceaux]=...
+    ferncodes_flowrateTPFA(p,env)
 
 coord=env.geometry.coord;
 bedge=env.geometry.bedge;
@@ -7,14 +8,14 @@ centelem=env.geometry.centelem;
 bcflag=env.config.bcflag;
 numcase=env.config.numcase;
 viscosity=env.config.visc;
-flowrateZ=premethod.TPFA.flowrateZ;
-kmap=parmRichardEq;
+flowrateZ=env.premethod.TPFA.flowrateZ;
+
 
 
 %--------------------------------------------------------------------------
-Kde=premethod.TPFA.Kde;
-Kn=premethod.TPFA.Kn;
-Hesq=premethod.TPFA.Hesq;
+Kde=env.premethod.TPFA.Kde;
+Kn=env.premethod.TPFA.Kn;
+Hesq=env.premethod.TPFA.Hesq;
 nflag=env.config.nflag;
 
 bedgesize = size(bedge,1);
@@ -120,8 +121,7 @@ flowresult = flowresult + accumarray(lef,flowrate(idx),size(flowresult))- ...
 
 if (200<numcase && numcase<300) || (379<numcase && numcase<400)
 
-    flowratedif(bedgesize+1:end) = ...
-        Kdec .* (Con(rel)-Con(lef));
+    flowratedif(bedgesize+1:end) = Kdec .* (Con(rel)-Con(lef));
 
 end
 

@@ -1,24 +1,24 @@
-function [M,I]=soil_properties(M,I,parmRichardEq,flowresultZ,env)
+function [M,I]=soil_properties(M,I,parms,flowresultZ,env)
 
 
 Area=env.geometry.elemarea;
 
-h_n=parmRichardEq.h_init;
-h_m=parmRichardEq.h_old;
-dt=parmRichardEq.dt;
+h_n=parms.h_init;
+h_m=parms.h_old;
+dt=parms.dt;
+invdt = 1/dt;
 
 %-------------------------------------------------------------------------
-% calcula theta inicial
-theta_n=thetafunction(h_n,parmRichardEq,env); 
-% calcula theta para cada intercao
-theta_m=thetafunction(h_m,parmRichardEq,env); 
-% capacidade de solo para cada iteracao
-dthetadh=SWcapacity(h_m,parmRichardEq,env); 
+theta_n  = env.benchmark.calcularTheta(h_n, parms);
+theta_m  = env.benchmark.calcularTheta(h_m, parms);
+dthetadh = env.benchmark.calcularCapacidade(h_m, parms);
 
 Dtheta=theta_m - theta_n;
 
-M=M+(dt^-1)*diag(dthetadh.*Area(:));
+coef=invdt.*dthetadh.*Area(:);
+coefI=dthetadh.*Area(:);
 
-I=I+(dt^-1).*(diag(dthetadh.*Area(:))*h_m-Dtheta.*Area(:))-flowresultZ;
+M = M + spdiags(coef, 0, size(M,1), size(M,2));
 
+I = I + invdt .* (coefI .* h_m - Dtheta.*Area(:)) - flowresultZ;
 end

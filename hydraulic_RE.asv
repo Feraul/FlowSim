@@ -1,991 +1,146 @@
 %--------------------------------------------------------------------------
-%Subject: obtain the hydraulic head from the Richards' equation
-%Type of file: FUNCTION
-%Programer: Fernando Contreras,
+% hydraulic_RE — Loop temporal para a Equacao de Richards
+%
+% Resolve o problema transiente nao-linear de fluxo em meio nao saturado:
+%
+%   d(theta(h))/dt - div(K(h) grad(h)) = f
+%
+% Metodo:
+%   - Discretizacao temporal implicita (Euler implicito)
+%   - Linearizacao por iteracoes de Picard (dentro de ferncodes_solver)
+%   - Atualizacao de kmap a cada passo de tempo (Richards nao-linear)
+%
+% Entradas:
+%   env          — estrutura global (geometria, config, premethod, benchmark, metodo)
+%   parms        — parametros fisicos (h_init, h_old, dt, theta_s, theta_r...)
+%   source_wells — pocos injetores/produtores
 %--------------------------------------------------------------------------
-%This routine receives geometry and physical data.
-function hydraulic_RE(env,premethod,parmRichardEq,source_wells)
-% inicializando variaveis globais
-centelem=env.geometry.centelem;numcase=env.config.numcase;elem=env.geometry.elem;
-inedge=env.geometry.inedge;bedge=env.geometry.bedge;dt= parmRichardEq.dt;
-alpha=parmRichardEq.alpha;nvg=parmRichardEq.nvg;normals=env.geometry.normals;
-coord=env.geometry.coord;finaltime=env.config.totaltime;elemarea=env.geometry.elemarea;
+function hydraulic_RE(env, parms, source_wells)
 
-% determina a altura 75 onde esta localizado a face
-afaceaux=find(abs(env.geometry.coord(env.geometry.inedge(:,1),2)-60)<1e-9);
-facestop=afaceaux+size(env.geometry.bedge,1);
-% os elementos que conforman ate a acima da altura 75
-elemaux=find(env.geometry.centelem(:,2)>75);
+centelem  = env.geometry.centelem;
+dt        = parms.dt;
+finaltime = env.config.totaltime;
 
-%---------------------------------------------------------------------------
-% h: representa a carga hidraulica
-% h_new: carga hidraulica atualizado a cada passo de tempo
-% h_old: carga hidraulica inicial (a partir da condicao inicial)
-%--------------------------------------------------------------------------
-%% ================== Inicialização de parâmetros ==================
-hanalit          = 0;
-haux             = 0;
-time             = 0;              % tempo (dimensional ou adimensional)
-stopcriteria     = 0;
-orderintimestep  = zeros(size(env.geometry.elem,1),1);
-count            =1;
-auxcount         =1;
-count1           =1;
-x                = centelem(:,1);
-y                = centelem(:,2);
-hnsum=0;
+%% ── Inicializacao ────────────────────────────────────────────────
 
-h                = parmRichardEq.h_init;
-count_aux = 1; MBE = 0; MBE2 = 0;
+time         = 0;
+stopcriteria = 0;    % percentual do tempo total concluido (0 a 100)
+count        = 1;    % contador de passos de tempo
+h            = parms.h_init;
 
-h_storage      = [env.geometry.centelem(:,2) h];
-time_storage   = 0;
-jx             = 1;
-sizebedge=size(env.geometry.bedge,1);
-sizeinedge=size(env.geometry.inedge,1);
-sizebedgeinedge= sizebedge+sizeinedge;
+% theta no instante inicial (t=0) — usado para calculo de erros e MBE
+theta_init = thetafunction(h, parms, env);
 
-% Armazena VTK no tempo 0
-%postprocessor(h,0*ones(sizebedgeinedge,1),0*parmRichardEq.h_init,...
-%    time_storage,env,1,parmRichardEq)
+% storage de campos ao longo do tempo — coluna 1: coordenada z, coluna 2+: valores
+% crescimento por colunas (mais eficiente que por linhas para acesso sequencial)
+h_storage     = [centelem(:,2) h];
+theta_storage = [centelem(:,2) theta_init];
+kmap_storage  = env.config.auxkmap(:,2);
+time_storage  = 0;
+dtaux         = dt;
 
-%% ================== Casos especiais por numcase ==================
-if env.config.numcase == 432
-    auxelem22 = env.goemetry.bedge(57:80,3);
-    plot(parmRichardEq.h_init(auxelem22), env.config.perm(auxelem22,2))
-    xlabel('h(m)')
-    ylabel('Hidraulic conductivity')
+% ── extrai referencias fora do loop ──────────────────────────────
+% evita lookup em env a cada iteracao (overhead de struct field access)
+benchmark = env.benchmark;
+metodo    = env.metodo;
 
-elseif env.config.numcase == 431
-    mmm   = (size(env.geometry.bedge,1)/2) + 1;
-    sumax = 0;
-    sumax1 = 0;
-elseif env.config.numcase == 436
-    u_exact(:,count) = -0 .* x.*(1-x) .* y.*(1-y) - 1;
+% ── flag pre-calculado fora do loop ──────────────────────────────
+% precisaAtualizarFlags e constante durante o loop para a maioria dos casos
+% (so caso 436 retorna true — BC dependente do tempo)
+flag_atualizaFlags = benchmark.precisaAtualizarFlags(0);
 
-elseif env.config.numcase == 437
-    wA=elemarea;
-    h_init_exact=h;%carga_hidraulica(centelem(:,1),centelem(:,2),0,parmRichardEq);
-    theta_init_exact=thetafunction(h_init_exact,parmRichardEq,env);
-    theta_init_num=thetafunction(h,parmRichardEq,env);
-
-
-    totalmassa(auxcount,1)=0;
-    totalmassa(auxcount,2)=sum(wA.*theta_init_exact);
-    totalmassa(auxcount,3)=sum(wA.*theta_init_num);
-    DT_num=theta_init_num;
-    DT_exac=theta_init_exact;
-
-    %relative_mass=norm(DT_exac-DT_num)/norm(DT_exac);
-
-    %totalmassa(auxcount,4)=relative_mass;
-    %----------------------------------------
-elseif env.config.numcase == 439
-
-    % ponto 1,
-    mask1 = (105<centelem(:,2) & centelem(:,2) < 110) &  (centelem(:,1) > 10 & centelem(:,1) < 15);
-    centro1 = find(mask1);
-
-    %ponto 2
-    mask2 = (130<centelem(:,2) & centelem(:,2) < 135) &  (centelem(:,1) > 10 & centelem(:,1) < 15);
-    centro2 = find(mask2);
-
-    % ponto 3
-    mask3 = (185<centelem(:,2) & centelem(:,2) < 190) &  (centelem(:,1) > 10 & centelem(:,1) < 15);
-    centro3 = find(mask3);
-
-    % ponto 4
-
-    mask4 = (80<centelem(:,2) & centelem(:,2) < 85) &  (centelem(:,1) > 160 & centelem(:,1) < 165);
-    centro4 = find(mask4);
-
-    % ponto 5
-    mask5 = (115<centelem(:,2) & centelem(:,2) < 120) &  (centelem(:,1) > 160 & centelem(:,1) < 165);
-    centro5 = find(mask5);
-
-    % ponto 6
-    mask6 = (155<centelem(:,2) & centelem(:,2) < 160) &  (centelem(:,1) > 160 & centelem(:,1) < 165);
-    centro6 = find(mask6);
-
-    theta_init_num=thetafunction(h,parmRichardEq,env);
-    h_time1(1,1:3)=[time,h(centro1),theta_init_num(centro1)];
-    h_time2(1,1:3)=[time,h(centro2),theta_init_num(centro2)];
-    h_time3(1,1:3)=[time,h(centro3),theta_init_num(centro3)];
-    h_time4(1,1:3)=[time,h(centro4),theta_init_num(centro4)];
-    h_time5(1,1:3)=[time,h(centro5),theta_init_num(centro5)];
-    h_time6(1,1:3)=[time,h(centro6),theta_init_num(centro6)];
-
-
-    postprocessor(h,theta_init_num,0*parmRichardEq.h_init,...
-        time_storage,env,1,parmRichardEq)
-end
-
-dtaux        = parmRichardEq.dt;
-iterinicial  = 1;
-theta_init     = thetafunction(h,parmRichardEq,env);
-theta_storage  = [env.geometry.centelem(:,2) theta_init];
-kmap_storage   = env.config.perm(:,2);
-sum2           = 0;
-sum1           = 0;
-vnsum          =0;
-
-% figure(1); clf;
-% hold on;
-% hplot = plot(NaN, NaN, 'o');   % marcador vazio
-% xlabel('tempo');
-% ylabel('flowrate(4584)');
+% ── inicializacao especifica do benchmark ─────────────────────────
+% ex: caso 439 calcula pontos de monitoramento e series temporais t=0
+[parms, extras] = benchmark.inicializar(env, parms, time);
 
 tic
-%% ================== Loop temporal principal ==================
+%% ── Loop temporal principal ──────────────────────────────────────
 while stopcriteria < 100
 
-    %% --------- Cálculo da carga hidráulica (h_new) e vazão (flowrate) -----
-    % MPFA-D (diamond patch) or TPFA
-    [h_new, flowrate, flowresult, flowratedif,faceaux,parmRichardEq,premethod] = ...
-        ferncodes_solver(env,premethod,parmRichardEq,dtaux,source_wells,time);
+    %% ── 1. Resolve o sistema linear em h_new ────────────────────
+    % ferncodes_solver:
+    %   a) monta a matriz global A (benchmark.montarSistema)
+    %   b) adiciona termos de fonte e poco
+    %   c) itera Picard ate convergencia (ferncodes_iterpicard)
+    %   d) calcula flowrate com h convergido (metodo.calcularFlowrate)
+    [h_new, flowrate, flowresult, flowratedif, faceaux, parms, env] = ...
+        ferncodes_solver(env, parms, dtaux, source_wells, time);
 
-    if count == 1
-        sum1 = sum(flowresult);
-    end
-
-    % --------- Atualização da permeabilidade kmap_h -----------------------
-    kmap_storage(:,2*count-1:2*count) = [centelem(:,2) parmRichardEq.auxperm(:,2)];
-
-    % --------- Atualização do tempo e critério de parada ------------------
-    disp('>> Time evolution:');
-    time = time + dt
-    concluded     = time*100/finaltime;
-    stopcriteria  = concluded;
-
-    status = [num2str(concluded) '% concluded']
-
-    count = count + 1
-
-    % Atualiza carga hidráulica
+    %% ── 2. Avanca o tempo ────────────────────────────────────────
+    time         = time + dt;
+    stopcriteria = time*100/finaltime;   % percentual concluido
+    disp([num2str(stopcriteria) '% concluded']);
+    count = count + 1;
     h     = h_new;
     dtaux = dt;
 
-    %% --------- Pós-processamento e armazenamento --------------------------
-    h_storage(:,2*count-1:2*count) = [centelem(:,2) h];
+    %% ── 3. Calcula theta e armazena campos ───────────────────────
+    % theta calculado UMA vez aqui e passado para atualizarEstado
+    % evita recalculo dentro do benchmark (custo O(nelem))
+    theta_n = thetafunction(h, parms, env);
 
-    theta_n = thetafunction(h,parmRichardEq,env);
-    theta_storage(:,2*count-1:2*count) = [centelem(:,2) theta_n];
+    % armazena h, theta e kmap no passo atual
+    % formato: [z, valor_t1, valor_t2, ...] — uma linha por elemento
+    h_storage(:, 2*count-1:2*count)     = [centelem(:,2) h];
+    theta_storage(:, 2*count-1:2*count) = [centelem(:,2) theta_n];
+    kmap_storage(:, 2*count-1:2*count)  = [centelem(:,2) parms.auxperm(:,2)];
+    time_storage(count,1)               = time;
 
-    time_storage(count,1) = time;
+    %% ── 4. Logica especifica do benchmark ────────────────────────
+    % ex: caso 439 → atualiza h_old, chama postprocessor, armazena h_time
+    % ex: caso 436 → calcula erro L2, atualiza fonte, atualiza h_init exato
+    [parms, extras] = benchmark.atualizarEstado(env, parms, extras, ...
+        h, flowrate, time, count);
 
-    %% ================== Tratamento por numcase ==================
-    if numcase == 431
+    %% ── 5. Atualiza kmap e premethod para o proximo passo ────────
+    % Richards nao-linear: K(h) muda a cada passo de tempo
+    % PLUG_kfunction   → recalcula kmap com novo h (via benchmark.configurarPermeabilidade)
+    % atualizarPremethod → recalcula Kde, Ded, Kn, Kt, pesos LPEW2 com novo kmap
+    [env] = PLUG_kfunction(env, parms, time);
+    [env] = metodo.atualizarPremethod(env, parms);
 
-        postprocessor(h,0*parmRichardEq.h_init,0*parmRichardEq.h_init,...
-            time_storage,env,count,parmRichardEq);
-        % chute inicial para o método iterativo
-        p_oldaux1 = (h <= 0);
-        p_oldaux2 = (h > 0);
-        p_old     = 100*p_oldaux2 - 100*p_oldaux1;
-        parmRichardEq.h_old=p_old;
-        parmRichardEq.h_init=h;
-        % cálculo do balanço de massa
-        pqp = 100/size(elem,1);
-
-        % Conservação de massa em altura definida
-        sum2 = sum2 + (-flowrate(mmm,1) + flowrate(facestop,1));
-        MBE1(count_aux,1)  = time;
-        MBE1(count_aux,2)  = ( (sum(theta_n(elemaux)-theta_init(elemaux))*pqp ...
-            - sum2*dt) / (sum(theta_init(elemaux))*pqp) );
-
-        MBER1(count_aux,1) = time;
-        MBER1(count_aux,2) = (sum(theta_n(elemaux)-theta_init(elemaux))*pqp) ...
-            /(abs(sum2)*dt);
-
-        % Conservação de massa global
-        sum1 = sum1 + (-flowrate(mmm,1) + flowrate(1,1));
-        MBE2(count_aux,1)  = time;
-        MBE2(count_aux,2)  = (sum(theta_n-theta_init)*pqp - sum1*dt) ...
-            /(sum(theta_init)*pqp);
-
-        MBER2(count_aux,1) = time;
-        MBER2(count_aux,2) = (sum(theta_n-theta_init)*pqp)/(sum1*dt);
-
-        count_aux = count_aux + 1;
-
-        % Fluxos de contorno
-        flux_contour_inter(jx,1) = time;
-        flux_contour_inter(jx,2) = abs(flowrate(mmm));
-        flux_contour_inter(jx,3) = abs(flowrate(facestop));
-
-        sumax = sumax + abs(flux_contour_inter(jx,2))*dt;
-        kmap_h=parmRichardEq.auxperm;
-        kmapaux=env.config.perm;
-        % Verifica se atingiu altura desejada
-        if  kmap_h(inedge(afaceaux,3),2) == kmapaux(1,2) && ...
-                kmap_h(inedge(afaceaux,4),2) == kmapaux(1,2)
-
-            store_influx_contourflux_and_time(1,1) = time;
-            store_influx_contourflux_and_time(1,2) = abs(flowrate(facestop));
-            store_influx_contourflux_and_time(1,3) = abs(flowrate(mmm));
-
-            store_acumulativeflux_time(1,1) = time;
-            store_acumulativeflux_time(1,2) = sumax;
-
-            MBEunico  = MBE2;
-            MBERunico = MBER2;
-            break
-
-        elseif stopcriteria >= 100
-            store_influx_contourflux_and_time(1,1) = time;
-            store_influx_contourflux_and_time(1,2) = abs(flowrate(facestop));
-            store_influx_contourflux_and_time(1,3) = abs(flowrate(mmm));
-
-            store_acumulativeflux_time(1,1) = time;
-            store_acumulativeflux_time(1,2) = sumax;
-
-            MBEunico  = MBE2;
-            MBERunico = MBER2;
-        end
-
-        jx = jx + 1;
-
-    elseif numcase == 433
-        p_oldaux1 = (h <= 0);
-        p_oldaux2 = (h > 0);
-        p_old     = 25*p_oldaux2 - 25*p_oldaux1;
-        parmRichardEq.h_old=p_old;
-
-    elseif numcase == 432
-        if time <= 1      % Beit Netofa clay
-            bcflag(3,2) = -2 + (2.2*(time/1));
-        else
-            bcflag(3,2) = 0.2;
-        end
-
-        % Atualiza condição de Dirichlet
-        [nflag, nflagface] = ferncodes_calflag(0);
-
-        p_oldaux1 = (h <= 0);
-        p_oldaux2 = (h > 0);
-        p_old     = 2*p_oldaux2 - 2*p_oldaux1;
-        parmRichardEq.h_old=p_old;
-
-    elseif numcase == 434
-        p_oldaux1 = (h <= 0);
-        p_oldaux2 = (h > 0);
-        p_old     = 50*p_oldaux2 - 50*p_oldaux1;
-        parmRichardEq.h_old=p_old;
-
-    elseif numcase == 435
-        p_oldaux1 = (h <= 0);
-        p_oldaux2 = (h > 0);
-        p_old     = 5*p_oldaux2 - 5*p_oldaux1;
-        parmRichardEq.h_old=p_old;
-
-    elseif numcase == 436
-        p_oldaux1 = (h <= 0);
-        p_oldaux2 = (h > 0);
-        p_old     = 10*p_oldaux2 - 5*p_oldaux1;
-
-        %------------------------------------------------------------------
-        x = centelem(:,1);
-        y = centelem(:,2);
-        t = time;
-        u_exact = -3*t .* x.*(1-x) .* y.*(1-y) - 1;
-        %------------------------------------------------------------------
-        v1=bedge(:,1); v2=bedge(:,2);
-        m_bedge=0.5*(coord(v1,1:2)+coord(v2,1:2));
-        areanormal(1:sizebedge,1)=norm(coord(v1,1:2)-coord(v2,1:2));
-        xbedge=m_bedge(:,1); ybedge=m_bedge(:,2);
-        u_exact_bedge=-3*t .* xbedge.*(1-xbedge) .* ybedge.*(1-ybedge) - 1;
-        % gradiente de p
-        dpdx = -3*t .* (1 - 2*xbedge) .* ybedge.*(1-ybedge);
-        dpdy = -3*t .* xbedge.*(1-xbedge) .* (1 - 2*ybedge);
-
-        % k(theta(p)) por partes
-        ktheta = ones(size(u_exact_bedge));                 % caso p > 0
-        mask = u_exact_bedge <= 0;                        % caso p <= 0
-        ktheta(mask) = (1 + (-alpha*u_exact_bedge(mask)).^nvg).^(-(nvg-1)/nvg);
-
-        % velocidade v = -k * grad(p)
-        vx1 = -ktheta .* dpdx;
-        vy1 = -ktheta .* dpdy;
-
-        vn(1:sizebedge,1) = vx1 .* normals(1:sizebedge,1) + vy1 .* normals(1:sizebedge,2);
-        %------------------------------------------------------------------
-        v11=inedge(:,1); v21=inedge(:,2);
-        m_inedge=0.5*(coord(v11,1:2)+coord(v21,1:2));
-        areanormal(sizebedge+1:sizebedgeinedge,1)=norm(coord(v11,1:2)-coord(v21,1:2));
-        xinedge=m_inedge(:,1); yinedge=m_inedge(:,2);
-        % gradiente de p
-        dpdx = -3*t .* (1 - 2*xinedge) .* yinedge.*(1-yinedge);
-        dpdy = -3*t .* xinedge.*(1-xinedge) .* (1 - 2*yinedge);
-        u_exact_inedge = -3*t .* xinedge.*(1-xinedge) .* yinedge.*(1-yinedge) - 1;
-
-        % k(theta(p)) por partes
-        ktheta = ones(size(u_exact_inedge));                 % caso p > 0
-        mask = u_exact_inedge <= 0;                        % caso p <= 0
-        ktheta(mask) = (1 + (-alpha*u_exact_inedge(mask)).^nvg).^(-(nvg-1)/nvg);
-
-        % velocidade v = -k * grad(p)
-        vx = -ktheta .* dpdx;
-        vy = -ktheta .* dpdy;
-
-        vn(sizebedge+1:sizebedgeinedge,1) = vx .* normals(sizebedge+1:sizebedgeinedge,1) + vy .* normals(sizebedge+1:sizebedgeinedge,2);
-        %--------------------------------------------------------------
-        vn_numerico=flowrate./areanormal;
-
-        %----------------------------------------------------------------
-
-
-        wA = elemarea;                         % pesos por elemento
-        diffp = u_exact-h;                   % diferença analítica - numérica
-        hnsum=hnsum+ dt*(sum(wA .* diffp.^2) / sum(wA) );
-
-        % erro de velocidade
-        % pesos Q para cada aresta
-        Q = zeros(size(inedge,1) + size(bedge,1), 1);
-
-        Q(1:size(bedge,1)) = elemarea(bedge(:,3));
-        % modifique aqui colocando 0.5 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        Q(size(bedge,1)+1:end) = 0.5.*(elemarea(inedge(:,3)) + elemarea(inedge(:,4)));
-
-        e=vn-vn_numerico;
-        er=e.^2;
-        vnsum=vnsum+dt*(Q'*er)/sum(Q');
-
-
-        postprocessor(h,u_exact,0*parmRichardEq.h_init,...
-            time_storage,env,count,parmRichardEq);
-
-        parmRichardEq.h_old=p_old;
-
-        parmRichardEq.h_init=u_exact;
-        [source] = PLUG_sourcefunction(0,env,time,parmRichardEq);
-        source_wells.source=source;
-    elseif numcase == 437
-
-        p_oldaux1 = (h <= 0);
-        p_oldaux2 = (h > 0);
-        p_old     = 1*p_oldaux2 - 10*p_oldaux1;
-        parmRichardEq.h_old=p_old;
-        parmRichardEq.h_init=h;
-        auxcount=auxcount+1;
-
-        flowresultZ=preMPFAD.flowresultZ;
-        %------------------------------------------------------------------
-        [h_exact]=carga_hidraulica(centelem(:,1),centelem(:,2),time,parmRichardEq);
-        wA = elemarea;                         % pesos por elemento
-        diffp = h_exact-h;                     % diferença analítica - numérica
-        hnsum=hnsum+ dt*(sum(wA .* diffp.^2) / sum(wA) );
-        %------------------------------------------------------------------
-        theta_exact=thetafunction(h_exact,parmRichardEq,env);
-        theta_num=thetafunction(h,parmRichardEq,env);
-
-        totalmassa(auxcount,1)=time;
-        totalmassa(auxcount,2)=sum(wA.*theta_exact);
-        totalmassa(auxcount,3)=sum(wA .*theta_num);
-
-        if 0.1<=time
-            relativemassa(count1,1)=time;
-            DT_num=wA.*(theta_num-theta_init_num);
-            DT_exac=wA.*(theta_exact-theta_init_exact);
-
-            relative_mass=norm(DT_exac-DT_num)/norm(DT_exac);
-
-            relativemassa(count1,2)=relative_mass;
-            count1=count1+1;
-        end
-        %------------------------------------------------------------------
-        postprocessor(h,h_exact,flowresultZ,time_storage,env,count,...
-            parmRichardEq);
-        %------------------------------------------------------------------
-
-        [q,q_numerico] = fluxo_Richards(env.geometry.medEdge(:,1),...
-            env.geometry.medEdge(:,2), time, parmRichardEq,env,flowrate);
-
-        Q = zeros(size(inedge,1) + size(bedge,1), 1);
-
-        Q(1:size(bedge,1)) = elemarea(bedge(:,3));
-        Q(size(bedge,1)+1:end) = 0.5*(elemarea(inedge(:,3)) + elemarea(inedge(:,4)));
-
-        e=q-q_numerico;
-        er=e.^2;
-        vnsum=vnsum+dt*(Q'*er)/sum(Q');
-        %------------------------------------------------------------------
-        % Conservacao de massa
-        sum2 = sum2+sum(flowrate(1:size(bedge,1),1));
-        MBE1(count_aux,1)  = time;
-        MBE1(count_aux,2)  = (sum(wA.*theta_num-wA.*theta_init_num) ...
-            - abs(sum2)*dt) / (sum(wA.*theta_init_num)) ;
-
-        MBER1(count_aux,1) = time;
-        MBER1(count_aux,2) = (sum(wA.*theta_num-wA.*theta_init_num)) ...
-            /(abs(sum2)*dt);
-
-        count_aux=count_aux+1;
-    elseif numcase==438
-        p_oldaux1 = (h <1);
-        p_oldaux2 = (h >= 1);
-        p_old     = 10*p_oldaux2 - 10*p_oldaux1;
-        parmRichardEq.h_old=p_old;
-        parmRichardEq.h_init=h;
-        flowresultZ=preMPFAD.flowresultZ;
-        %------------------------------------------------------------------
-        postprocessor(h,0*h,0*flowresultZ,time_storage,env,count,...
-            parmRichardEq);
-    elseif numcase==439
-        p_oldaux1 = (h <0);
-        p_oldaux2 = (h >= 0);
-        p_old     = 20*p_oldaux2 - 30*p_oldaux1;
-        parmRichardEq.h_old=p_old;
-        parmRichardEq.h_init=h;
-        if strcmp(env.config.pmethod,'tpfa')
-            flowresultZ=premethod.TPFA.flowresultZ;
-        else
-            flowresultZ=premethod.MPFAD.flowresultZ;
-        end
-
-        %------------------------------------------------------------------
-        h1=(h-(200-centelem(:,2)));
-        postprocessor(h,theta_n,0*flowresultZ,time_storage,env,count,...
-            parmRichardEq);
-
-        h_time1(count,1:3)=[time,h(centro1),theta_n(centro1)];
-        h_time2(count,1:3)=[time,h(centro2),theta_n(centro2)];
-        h_time3(count,1:3)=[time,h(centro3),theta_n(centro3)];
-        h_time4(count,1:3)=[time,h(centro4),theta_n(centro4)];
-        h_time5(count,1:3)=[time,h(centro5),theta_n(centro5)];
-        h_time6(count,1:3)=[time,h(centro6),theta_n(centro6)];
-        %-------------------------------------------------------------------
-
-        % set(hplot, 'XData', [get(hplot,'XData') time], ...
-        %    'YData', [get(hplot,'YData') sss]);
-        % drawnow;
+    %% ── 6. Atualiza flags se necessario ──────────────────────────
+    % Apenas caso 436 (BC dependente do tempo) retorna flag=true
+    % Para caso 439: flag_atualizaFlags = false → bloco nao executa
+    if flag_atualizaFlags
+        [env] = ferncodes_calflag(env, parms, time);
     end
 
-    %% --------- Atualizações específicas para MPFA-D ---------------------
-    if strcmp(env.config.pmethod,'mpfad')
-        [env,parmRichardEq] = PLUG_kfunction(env, parmRichardEq, time);
-
-        [premethod] = ferncodes_Kde_Ded_Kt_Kn(env,parmRichardEq,premethod);
-
-        [premethod,~,~] = ferncodes_Pre_LPEW_2_vect(premethod,parmRichardEq,env);
-
-        if numcase==436
-            [env] = ferncodes_calflag(env,parmRichardEq,time);
-        end
-    else % TPFA
-        [env,parmRichardEq] = PLUG_kfunction(env, parmRichardEq, time);
-
-        [premethod] = ferncodes_Kde_Ded_Kt_Kn(env,parmRichardEq,premethod);
-
-        [premethod,~,~] = ferncodes_Pre_LPEW_2_vect(premethod,parmRichardEq,env);
-        if numcase==436
-            [env] = ferncodes_calflag(env,parmRichardEq,time);
-        end
+    %% ── 7. Criterio de parada especial do benchmark ──────────────
+    % caso 431: para quando a frente de umidade atinge a altura alvo
+    % caso 439: sempre false (para apenas pelo stopcriteria >= 100)
+    if benchmark.deveParar(parms, env.premethod, extras, stopcriteria)
+        break
     end
 
-    iterinicial = iterinicial + 1;
-
-    %% --------- Pós-processamento extra e gráficos -------------------------
-    %postprocessor(h, flowrate, Con, 1-Con, count, ...
-    %              overedgecoord, orderintimestep, ...
-    %              'i', 1, kmap_h(:,2), time);
-    if numcase == 432 && count == 2
-        auxelem22 = bedge(49:80,3);
-        plot(h(auxelem22), kmap(auxelem22,2))
-        xlabel('h(m)')
-        ylabel('hidraulic conductivity')
+    %% ── 8. Log periodico ─────────────────────────────────────────
+    % exibe progresso a cada 10 passos para nao poluir o console
+    if mod(count, 10) == 0
+        fprintf('%.1f%% concluded (t=%.4f)\n', stopcriteria, time);
     end
 
-    faceaux(:,1) = faceaux(:,1) .* (stopcriteria >= 100);
-
-end  % while
-if numcase==436
-    wA = elemarea;                         % pesos por elemento
-    diffp = u_exact-h;                   % diferença analítica - numérica
-    hnsum1=(sum(wA .* diffp.^2) / sum(wA) );
-
-    errortotal1=(hnsum+vnsum) % Analysis of an Euler Implicit-Mixed Finite Element
-    % Scheme for Reactive Solute Transport in Porous Media, veja o paragrafo da
-    % equacao 5.5, dh=dt.
-
-    errortotal2=(hnsum1+vnsum) % artigo:Convergence analysis for a mixed finite element scheme for flow in
-    %strictly unsaturated porous media, ultimo paragrafo da equacao 37, dh=dt.
-    errorateconv(u_exact, h, vn,vn_numerico,env)
-elseif numcase==437
-
-    wA = elemarea;                         % pesos por elemento
-    diffp = h_exact-h;                   % diferença analítica - numérica
-    hnsum1=(sum(wA .* diffp.^2) / sum(wA) );
-
-    errortotal1=(hnsum+vnsum) % Analysis of an Euler Implicit-Mixed Finite Element
-    % Scheme for Reactive Solute Transport in Porous Media, veja o paragrafo da
-    % equacao 5.5, dh=dt.
-
-    errortotal2=(hnsum1+vnsum) % artigo:Convergence analysis for a mixed finite element scheme for flow in
-    %strictly unsaturated porous media, ultimo paragrafo da equacao 37, dh=dt.
-
-    figure(1)
-    plot(totalmassa(:,1),totalmassa(:,2),'k-')
-
-    hold on
-    plot(totalmassa(:,1),totalmassa(:,3),'b-')
-    legend('Exact solution','Numerical solution')
-    xlabel('t')
-    ylabel('Total mass')
-    figure(2)
-    plot(relativemassa(:,1),relativemassa(:,2))
-
-    figure(3)
-    plot(MBE1(:,1), MBE1(:,2),'g-')
-
-    figure(4)
-    plot(MBER1(:,1), MBER1(:,2),'r-')
-
-    wA = elemarea;                         % pesos por elemento
-
-    difftheta=theta_exact-theta_num;
-
-    thetasum=(sum(wA .* difftheta.^2) / sum(wA) );
-
-    diffp = h_exact-h;                     % diferença analítica - numérica
-    hnsum1=sqrt(sum(wA .* diffp.^2) / sum(h_exact.^2.*wA) );
-
-    Q = zeros(size(inedge,1) + size(bedge,1), 1);
-
-    Q(1:size(bedge,1)) = elemarea(bedge(:,3));
-    Q(size(bedge,1)+1:end) = 0.5*(elemarea(inedge(:,3)) + elemarea(inedge(:,4)));
-
-    e=q-q_numerico;
-    er=e.^2;
-    vnsum=sqrt((Q'*er)/sum(Q));
-end
-if numcase==435
-    % theta=thetafunction(h,theta_s,theta_r,alpha,pp,q);
-    % theta_init=thetafunction(h_init,theta_s,theta_r,alpha,pp,q);
-    % figure(1)
-    % plot(centelem(:,2),theta)
-    % xlabel('Elevation (cm)')
-    % ylabel('\theta(h)')
-    %
-    % hold on
-    % plot(centelem(:,2),theta_init )
-    % grid
-    % figure(2)
-    % plot(centelem(:,2),h)
-    % grid
-    % xlabel('Elevantion (cm)')
-    % ylabel('h(cm)')
-    % hold on
-elseif numcase==431
-    % theta_n=thetafunction(h,theta_s,theta_r,alpha,pp,q);
-    % theta_init=thetafunction(h_init,theta_s,theta_r,alpha,pp,q);
-
-    %MBE1=(sum(theta_n-theta_init)*0.25)/(sum2*dt);
-    % figure(1)
-    % plot(auxflow(:,1), auxflow(:,2))
-    % hold on
-    % plot(auxflow(:,1), auxflow(:,3),'o')
-    % figure(2)
-    % plot(auxflowresult(:,1), auxflowresult(:,2))
-    % figure(1)
-    % theta=thetafunction(h,theta_s,theta_r,alpha,pp,q);
-    % plot(theta,centelem(:,2))
-    % xlabel('\theta (cm)')
-    % ylabel('Elevation')
-    % grid
-    %
-    % figure(2)
-    % plot(h,centelem(:,2))
-    % hold on
-
-    % Warrick solution 11700
-    % BBB=[-343.291	73.1783
-    % -170.127	74.5736
-    % -78.9873	77.5194];
-
-    % Warrick solution 23400
-    % BBB=[-345.291	60.7752
-    % -170.127	62.3256
-    % -78.9873	65.8915];
-    % Warrick solution 46800
-
-    % BBB=[-343.291	39.8450
-    % -170.127	41.7054
-    % -78.9873	45.8915];
-    % plot(BBB(:,1),BBB(:,2), 's')
-    % xlabel('h (cm)')
-    % ylabel('Elevation(cm)')
-    % hold on
-    % grid
-    % figure(1)
-    % plot(MBE(:,1), MBE(:,2))
-    % xlabel('Time step (min)')
-    % ylabel('Massa Balance Error')
-    % grid
-elseif numcase==439
-
-
-
-
-    figure(1)
-    % tempo=2
-    A1=[300.0  65.0;
-        100.0  70.0656;
-        28.9426 78.4877];
-    plot(A1(:,1), A1(:,2),'o')
-    hold on
-
-    B1=[0	80
-        5.93714	79.9302
-        11.5250	79.9302
-        17.4622	79.5812
-        22.7008	78.8831
-        27.9395	78.5340
-        35.2736	77.4869
-        42.2584	76.4398
-        49.5925	75.7417
-        58.3236	74.3456
-        65.6577	73.2984
-        76.1350	71.9023
-        100.233	69.4590
-        112.806	68.0628
-        129.220	67.0157
-        139.697	65.9686
-        150.524	65
-        300.000	65
-        ];
-    plot(B1(:,1), B1(:,2),'-')
-    hold on
-    % tempo=3
-    A2=[300	65
-        161.698	75.5158
-        70.00	91.5765
-        2.28041	    100];
-    plot(A2(:,1), A2(:,2),'o')
-    hold on
-    B2=[0	100
-        11.0337	99.9812
-        23.5784	99.3283
-        33.3361	97.9411
-        46.2305	95.8582
-        57.0343	93.7729
-        68.8838	91.3391
-        80.0365	88.9046
-        91.5371	86.8201
-        104.780	84.3880
-        123.599	81.6127
-        142.765	79.1875
-        164.371	76.0
-        196.779	73.3064
-        228.141	70.5457
-        266.473	67.0939
-        300	65.0];
-    plot(B2(:,1), B2(:,2),'-')
-    hold on
-    % tempo=4
-    A3=[300	65
-        161.698	82.5585
-        129.780	89.98
-        70.00	101.622
-        2.28041	110];
-    plot(A3(:,1), A3(:,2),'o')
-    hold on
-    B3=[0	110
-        9.28058	109.610
-        19.3859	108.923
-        28.0979	107.886
-        39.2497	106.154
-        53.1902	103.378
-        67.1311	100.253
-        82.4658	97.1292
-        95.7094	94.3523
-        112.438	90.8814
-        126.378	88.8034
-        146.242	85.6851
-        183.879	80.4933
-        233.364	73.9191
-        300	65];
-    plot(B3(:,1), B3(:,2),'-')
-    hold on
-    % tempo=8
-
-    A4=[300	65
-        161.698	95.2342
-        129.780	102.227
-        70.0	114.354
-        36.6371	119.324
-        11.6036	119.705
-        2.28041	120];
-    plot(A4(:,1), A4(:,2),'o')
-    hold on
-
-    B4=[0.697674	120
-        9.41860	119.930
-        36.2791	118.531
-        72.9070	110.839
-        103.953	103.497
-        134.302	97.2028
-        162.907	91.6084
-        215.930	81.8182
-        257.093	73.4266
-        300.000	65];
-
-    plot(B4(:,1), B4(:,2),'-')
-
-    xlabel('Aquifer Lenght')
-    ylabel('Z')
-    grid
-    %--------------------------------------------------------------------------
-    figure(2)
-    m=1;
-    for i=1:size(centelem,1)
-
-        if (centelem(i,2)<200) && (20<centelem(i,1) && centelem(i,1)<25)
-            centro(m,1)=i;
-            m=m+1;
-        end
-
-    end
-
-    theta=theta_n(centro);
-
-    centroY=centelem(centro,2);
-
-    plot(theta, centroY)
-    hold on
-
-    plot(theta_init_num(centro),centroY)
-    hold on
-    % theta experimental x=20, t=0
-    T1=[0.309198	200-130.634
-        0.304946	200-121.653
-        0.319766	200-111.612
-        0.143656	200-100.410
-        0.142113	200-90.3880
-        0.0642259	200-81.4914
-        0.0558460	200-70.4409
-        0.0406789	200-61.1264
-        0.0473110	200-50.7499
-        0.0307680	200-40.7457
-        0.0156071	200-31.7768
-        0.00315489	200-21.7679
-        0.00980558	200-12.4283
-        ];
-    plot(T1(:,1), T1(:,2),'o')
-    hold on
-
-    % theta experimental x=20. t=8
-
-    T2=[0.318210	200-100.900
-        0.297576	200-90.9002
-        0.279670	200-80.8976
-        0.268581	200-70.8871
-        0.269765	200-60.8625
-        0.243677	200-50.8693
-        0.238030	200-40.1613
-        0.239239	200-31.5192
-        0.245877	200-21.4883
-        0.249801	200-12.1518];
-    plot(T2(:,1), T2(:,2),'o')
-    xlabel('Water Content')
-    ylabel('Z')
-    grid
-    %-------------------------------------------------------------------------
-    figure(3)
-    m=1;
-    for i=1:size(centelem,1)
-
-        if (centelem(i,2)<200) && (80<centelem(i,1) && centelem(i,1)<85)
-            centro_80(m,1)=i;
-            m=m+1;
-        end
-
-    end
-
-    theta_80=theta_n(centro_80);
-
-    centroY_80=centelem(centro_80,2);
-
-    plot(theta_80, centroY_80)
-    hold on
-    plot(theta_init_num(centro_80),centroY_80)
-    hold on
-    % theta experimental x=80. t=0
-    T3=[0.313699	200-121.724
-        0.324658	200-110.690
-        0.121918	200-100.345
-        0.153425	200-91.3793
-        0.0684932	200-81.3793
-        0.0602740	200-71.3793
-        0.0821918	200-61.3793
-        0.0917808	200-50.6897
-        0.0397260	200-41.0345
-        0.0383562	200-31.0345
-        0.0260274	200-21.7241
-        0.00273973	200-11.3793];
-
-    plot(T3(:,1), T3(:,2),'o')
-    hold on
-
-    % theta experimental x=80. t=8
-    T4=[0.319178	200-100.345
-        0.321918	200-91.0345
-        0.280822	200-81.0345
-        0.184932	200-71.7241
-        0.212329	200-60.6897
-        0.215068	200-51.3793
-        0.163014	200-41.3793
-        0.157534	200-31.3793
-        0.135616	200-21.0345
-        0.135616	200-11.3793
-        0.116438	200-3.10345];
-    plot(T4(:,1), T4(:,2),'o')
-    xlabel('Water Content')
-    ylabel('Z')
-    grid
-
-    %--------------------------------------------------------------------------
-    figure(4)
-    m=1;
-    for i=1:size(centelem,1)
-
-        if (centelem(i,2)<200) && (140<centelem(i,1) && centelem(i,1)<145)
-            centro_140(m,1)=i;
-            m=m+1;
-        end
-
-    end
-
-    theta_140=theta_n(centro_140);
-
-    centroY_140=centelem(centro_140,2);
-
-    plot(theta_140, centroY_140)
-    hold on
-    plot(theta_init_num(centro_140),centroY_140)
-    hold on
-    % theta experimental x=140. t=0
-    T3=[0.271622	200-121.379
-        0.239189	200-111.379
-        0.187838	200-101.034
-        0.101351	200-91.3793
-        0.0729730	200-80.3448
-        0.0581081	200-71.3793
-        0.0567568	200-60.3448
-        0.0432432	200-51.0345
-        0.0391892	200-41.0345
-        0.0162162	200-21.7241
-        0.0148649	200-10.6897
-        ];
-
-    plot(T3(:,1), T3(:,2),'o')
-    grid
-
-
-    % theta experimental x=140. t=8
-    T4=[0.278378	200-112.069
-        0.314865	200-101.379
-        0.275676	200-91.0345
-        0.259459	200-81.0345
-        0.228378	200-71.3793
-        0.117568	200-60.3448
-        0.0743243	200-51.0345
-        0.0527027	200-41.3793
-        0.0432432	200-31.7241
-        0.0135135	200-21.7241
-        ];
-    plot(T4(:,1), T4(:,2),'o')
-
-    figure(5)
-    plot(h_time1(:,1),h_time1(:,2))
-    hold on
-    plot(h_time2(:,1),h_time2(:,2))
-    hold on
-    plot(h_time3(:,1),h_time3(:,2))
-
-    xlabel('Time')
-    ylabel('Water Pressure ')
-    title('x=11')
-    grid
-
-    figure(6)
-    plot(h_time1(:,1),h_time1(:,3))
-    hold on
-    plot(h_time2(:,1),h_time2(:,3))
-    hold on
-    plot(h_time3(:,1),h_time3(:,3))
-    xlabel('Time')
-    ylabel('Water content ')
-    title('x=11')
-    grid
-
-    figure(7)
-    plot(h_time4(:,1),h_time4(:,2))
-    hold on
-    plot(h_time5(:,1),h_time5(:,2))
-    hold on
-    plot(h_time6(:,1),h_time6(:,2))
-
-    xlabel('Time')
-    ylabel('Water Pressure ')
-    title('x=161')
-    grid
-    figure(8)
-    plot(h_time4(:,1),h_time4(:,3))
-    hold on
-    plot(h_time5(:,1),h_time5(:,3))
-    hold on
-    plot(h_time6(:,1),h_time6(:,3))
-    xlabel('Time')
-    ylabel('Water Content ')
-    title('x=161')
-    grid
-
-end
+end % while
 toc
-% plotagem dos graficos em determinados regioes do dominio
-%plotandwrite(producelem,Con,h,satonvertices,0,0,0,time,overedgecoord,...
-%    hanalit,haux);
-%--------------------------------------------------------------------------
-% activate if you want to visualize the hydraulic field in the final time
 
-%h
+%% ── Finalizacao — graficos e erros ──────────────────────────────
+% delega ao benchmark: plots de h(t), theta(z), frentes de umidade, erros L2
+% ex: caso 439 → figures 2,5,6,7,8
+% ex: caso 437 → plots de massa total, erro relativo, MBE
+env.benchmark.finalizar(env, extras, theta_n);
 
-%--------------------------------------------------------------------------
-% profile off
-% profsave(profile('info'),'myprofile_results')
+%% ── Escrita de resultados em arquivo ─────────────────────────────
+% trunca o storage ao tamanho real (count passos realizados)
+h_storage     = h_storage(:,     1:2*count);
+theta_storage = theta_storage(:, 1:2*count);
+kmap_storage  = kmap_storage(:,  1:2*count);
+time_storage  = time_storage(    1:count);
 
-%Mesage for the user:
+% delega ao benchmark: cada caso escreve os arquivos que precisa
+% ex: caso 439 → h_steptime3.txt, WaterContent_steptime3.txt, ...
+env.benchmark.escreverResultados(env, h_storage, theta_storage, ...
+    kmap_storage, time_storage);
+
 disp('------------------------------------------------');
 disp('>> Global Hydraulic head extrema values [hmax hmin]:');
-max_hyval = max(h)
-min_hyval = min(h)
-% if numcase==342
-%     erro=norm(haux(:,2)-hanalit(:,2))
-% elseif numcase==343
-%    plot(h_time(:,1),h_time(:,2))
-%    hold on
-%    grid
-% end
-%It deletes the "restart.dat" file
-%command = ['del ' char(filepath) '\' 'restart.dat'];
-if numcase==431 || numcase==439
-    filepath=env.mainpathfolders.path;
-    tabfolder=env.mainpathfolders.tabfolder;
-
-    fname = [filepath '\' tabfolder '\'];
-
-    writematrix(h_storage,[fname 'h_steptime3.txt'])
-
-    writematrix(theta_storage, [fname 'WaterContent_steptime3.txt'])
-
-    writematrix(centelem,[fname 'centrocell3.txt'])
-
-    writematrix(time_storage,[fname 'time_step3.txt'])
-
-    writematrix(kmap_storage,[fname 'condhydraulic_steptime3.txt'])
-    if numcase==431
-        writematrix(flux_contour_inter(:,1:3),[fname 'flux_contour_inter_steptime3.txt'])
-    end
+fprintf('hmax = %.6f | hmin = %.6f\n', max(h), min(h));
 end
-%It calls system
-%system(command);
