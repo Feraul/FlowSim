@@ -59,6 +59,12 @@ function flowsim_init(varargin)
         if isfolder(d), paths{end+1} = d; end %#ok<AGROW>
     end
 
+    % 2b. runtime/ tree (active drivers/preproc/plug/util — relocated from root)
+    runtimeRoot = fullfile(rootDir, 'runtime');
+    if isfolder(runtimeRoot)
+        paths{end+1} = genpath(runtimeRoot); %#ok<AGROW>
+    end
+
     % 3. legacy procedural code — resolves last (shadowable by +fs twins)
     if opt.legacy
         legacyRoot = fullfile(rootDir, 'legacy');
