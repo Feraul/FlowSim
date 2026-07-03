@@ -1,471 +1,345 @@
-//--------------------------------------------------------------------
-//---------------- UNIVERSIDADE FEDERAL DE PERNAMBUCO ----------------
-//---------------- CENTRO DE TECNOLOGIA E GEOCIENCIAS ----------------
-//---------- PROGRAMA DE POS GRADUACAO EM ENGENHARIA CIVIL -----------
-//--------------------------------------------------------------------
 
-//Work developed by: Marcio Souza and Luiz E. Queiroz modify by Fernando
-//Advisor Professors: Paulo Lyra & Darlan Carvalho
-//Create date: .../2022
+//----------------------------------------------------------------------
+//  COMO USAR ESTE ARQUIVO:
+//  As linhas marcadas com  >>> EDITE AQUI <<<  sao os parametros que
+//  normalmente mudam de um caso para outro (malha, fisica, contorno...).
+//
+//  As secoes marcadas com  [AVANCADO - nao altere sem necessidade]
+//  controlam detalhes numericos internos do solver. Ja estao com
+//  valores testados e recomendados pelo grupo de pesquisa. So mexa
+//  se souber exatamente o que esta fazendo.
+//
+//  IMPORTANTE: a ordem das linhas de valor importa para o programa.
+//  Nao apague nem reordene linhas - apenas troque os valores.
+//======================================================================
 
-//--------------------------------------------------------------------
-//------------------- PREPROCESSOR INITIALIZATION --------------------
-//--------------------------------------------------------------------
 
-//--------------------------------------------------------------------
-//-------------------------- Set Benchmark ---------------------------
-//--------------------------------------------------------------------
+//======================================================================
+//  BLOCO 1 - ONDE SALVAR OS RESULTADOS
+//======================================================================
 
-//Do you want to run a benchmark case? [y] ==> "yes"; [n] ==> "no";
-// [r]==> "restart"  
-
+//----------------------------------------------------------------------
+// Rodar um caso de benchmark?
+// [y] = sim | [n] = nao | [r] = restart
+//----------------------------------------------------------------------
+                                                        // >>> EDITE AQUI <<<
 y
 
-//If [y], write below the path where where you want to store the
-//results (vtk, images, tables):
-//***OBS.: Even if you chose [n], write below both the path and 
-//folder's name where you want to store your results:
-
+//----------------------------------------------------------------------
+// Pasta onde os resultados (vtk, imagens, tabelas) serao gravados.
+// Preencha mesmo se a linha acima for [n].
+//----------------------------------------------------------------------
+                                                        // >>> EDITE AQUI <<<
 C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409
 
-//Write below either a number or any other key word to feature the 
-//folder where the results will be stored:
-//***OBS.: If you set "0", the folder "Results" and other will be 
-//created into folder set above:
-
+//----------------------------------------------------------------------
+// Nome da subpasta onde os resultados deste caso especifico ficarao.
+// Se colocar "0", o programa cria "Results" dentro da pasta acima.
+//----------------------------------------------------------------------
+                                                        // >>> EDITE AQUI <<<
 teste_semvalor
 
-//--------------------------------------------------------------------
-//------------------------ Solver Properties -------------------------
-//--------------------------------------------------------------------
 
-//--------------------------------------------------------------------
-//Type of Simulation
+//======================================================================
+//  BLOCO 2 - QUE TIPO DE PROBLEMA VOCE VAI RESOLVER?
+//======================================================================
 
-//Write below the type of simulation: 
-//[0] ==> "Only Hyperbolic Equation"; 
-//[1] ==> "One Phase-Flow";
-//[2] ==> "Two Phase-Flow".
-//[3] ==> "Contaminant transport"
-//[4] ==> "Groundwater"
-//[5] ==> "contaminant transport with hydarulic head"
-//[6] ==> "Richards' equations"
-
+//----------------------------------------------------------------------
+// Tipo de simulacao:
+//   [0] Somente Equacao Hiperbolica
+//   [1] Escoamento Monofasico
+//   [2] Escoamento Bifasico
+//   [3] Transporte de Contaminante
+//   [4] Aguas Subterraneas (Groundwater)
+//   [5] Transporte de Contaminante com Carga Hidraulica
+//   [6] Equacao de Richards
+//----------------------------------------------------------------------
+                                                        // >>> EDITE AQUI <<<
 6
 
-//--------------------------------------------------------------------
-// Do you want to compare the numerical results with data MODFLOW?
-//[y] ==> "yes"; [n] ==> "no".
-
+//----------------------------------------------------------------------
+// Comparar os resultados numericos com dados do MODFLOW?
+// [y] = sim | [n] = nao
+//----------------------------------------------------------------------
+                                                        // >>> EDITE AQUI <<<
 n
 
-//--------------------------------------------------------------------
-//Coordinate System (only 2D application)
-
-//Write below the Coordinate System: 
-//[xy] ==> "Cartesian Coordinate System"; 
-//[rz] ==> "Polar Coordinate System";
-
+//----------------------------------------------------------------------
+// [AVANCADO - nao altere sem necessidade]
+// Sistema de coordenadas (2D): [xy] Cartesiano | [rz] Polar
+//----------------------------------------------------------------------
 xy
 
-//If you chose [rz], write below the minimum radius and, immediately 
-//below, the vector which define the symmetry axe:
-
-//IMPORTANT: Avoid type "0" for define the "minimum radius". Instead, 
-//type a very low number (1e-10, for example)
-
+// Se escolheu [rz]: raio minimo (evite "0"; use algo como 1e-10) e,
+// na linha seguinte, o vetor que define o eixo de simetria.
 1e-8
 0 1 0
 
-//--------------------------------------------------------------------
-//MultiScale Properties
-
-//Do you want to run Multi-Scale Finite Volume Method? 
-//[y] ==> "yes"; [n] ==> "no".
-
+//----------------------------------------------------------------------
+// [AVANCADO - nao altere sem necessidade]
+// Rodar o Metodo Multiescala de Volumes Finitos?
+//----------------------------------------------------------------------
 n
 
-//If [y], write below the Coarsening Ratio. Set two values for the 
-//"x" and "y" direction:
-
+// Se [y]: razao de "coarsening" nas direcoes x e y.
 2 2
 
-//--------------------------------------------------------------------
-//Type of Solver for the Eliptic Equation (Pressure Equation)
 
-//Write below the type of Solver for the Eliptic Equation: 
-//[tpfa] ==> "Two-Point Flux Approximation" (Traditional Scheme); 
-//[mpfao] ==> "Multi-Point Flux Approximation" (type O);
-//[fps] ==> "Multi-Point Flux Approximation" (type FPS); 
-//[mpfae] ==> "Multi-Point Flux Approximation" (type Enriched); 
-//[mpfad] ==> "Multi-Point Flux Approximation" (type Diamond); 
-//[mpfaql]==> "Multi-Point Flux Approximation" MPFA-QL
-//[mpfah]==> "Multi-Point Flux Approximation" MPFA-H
-//[nlfvpp]==> "Non-Linear Finite Volume" using lpew
-//[nlfvh]==> "Non-Linear Finite Volume" using harmonic point
+//======================================================================
+//  BLOCO 3 - METODO NUMERICO (deixe como esta, salvo indicacao do
+//  orientador ou necessidade especifica do estudo)
+//  [AVANCADO - nao altere sem necessidade]
+//======================================================================
 
+// Solver da Equacao Eliptica (Pressao):
+//   [tpfa] Two-Point Flux Approximation
+//   [mpfao] MPFA tipo O | [fps] MPFA tipo FPS | [mpfae] MPFA Enriquecido
+//   [mpfad] MPFA Diamond | [mpfaql] MPFA-QL | [mpfah] MPFA-H
+//   [nlfvpp] Nao-Linear (lpew) | [nlfvh] Nao-Linear (ponto harmonico)
 tpfa
 
-//If you chose [fps] or [mpfae], write below the auxiliary control
-//volume factor. It defines the auxiliary control volume size.
-
+// Se [fps] ou [mpfae]: fator do volume de controle auxiliar.
 0.2
 
-//If you chose [mpfad], [nlfv] or [gmnl], you must set additional 
-//parameters:
-//Write below the type of nodal interpolation:
-//[id] ==> "Inverse Distance Interpolation";
-//[li] ==> "Linear Interpolation";
-//[hpi] ==> "Harmonic Point Interpolation" (Only for [gmnl]);
-//[lpew1] ==> "Linear Preserving Explicit Weighted" (type 1);
-//[lpew2] ==> "Linear Preserving Explicit Weighted" (type 2).
-
+// Se [mpfad], [nlfv] ou [gmnl]: tipo de interpolacao nodal.
+//   [id] Inverso da Distancia | [li] Linear | [hpi] Ponto Harmonico
+//   [lpew1] / [lpew2] Linear Preserving Explicit Weighted
 lpew2
 
-//If you chose a non-linear scheme, [nlfv] or [gmnl], you must set 
-//both Tolerance and Maximum Iteraction:
-
-//Write below the Tolerance for the non-linear system solution: 
-
+// Se esquema nao-linear: tolerancia e numero maximo de iteracoes.
 1e-6
+3000
 
-//Write below the Maximum Number of Iteraction allowed for the
-//non-linear system solution:
-
-3000 
-
-// Qual acelerador da itera  o de Picard desja utilizar:
-//[FPI] ==> "full Picard"; 
-//[AA] ==> "Aceleration Anderson" ;
-//[RRE] ==> "Rank Reduced Extrapolation" ; 
-//[MPE] ==> "Minimal Polynomial Extrapolation ". 
-//[Lscheme] ==> L scheme
-
+// Acelerador da iteracao de Picard:
+//   [FPI] Full Picard | [AA] Anderson | [RRE] Rank Reduced Extrapolation
+//   [MPE] Minimal Polynomial Extrapolation | [Lscheme] L-scheme
 FPI
 
-//--------------------------------------------------------------------
-//Type of Solver for the Hyperbolic Equation (Saturation Equation)
-
-//Write below the type of Solver for the Hyperbolic Equation: 
-//[stdr] ==> "Standard Schemes"; 
-//[mwec] ==> "Mass Weighted with Explicit Coefficient" (MultiD);
-//[mwic] ==> "Mass Weighted with Implicit Coefficient" (Kozdon); 
-//[goef] ==> "Goe Free Scheme" (Eymard et al., 2011). 
-
+// Solver da Equacao Hiperbolica (Saturacao):
+//   [stdr] Esquemas Padrao | [mwec] Mass Weighted Explicito
+//   [mwic] Mass Weighted Implicito (Kozdon) | [goef] Goe Free Scheme
 stdr
 
-//--------------------------------------------------------------------
-//Truly MultiDimensional Parameters
-
-//If you chose either [mwec] or [mwic], write below the type of 
-//weight for the convex combination: 
-//[1] ==> "TMU" (Tight Multidimensional Upstream); 
-//[2] ==> "SMU" (Smooth Multidimensional Upstream); 
-//[3] ==> "SMU2" (A Smooth Multidimensional Upstream Variation).
-
+// Se [mwec]/[mwic]: tipo de peso da combinacao convexa.
+//   [1] TMU | [2] SMU | [3] SMU2
 1
 
-//Additionaly, write below where the multidimensionality occurs: 
-//[1] ==> "into Water Saturation"; 
-//[2] ==> "into Fractional Flux".
-
+// Onde ocorre a multidimensionalidade:
+//   [1] na Saturacao da Agua | [2] no Fluxo Fracionario
 1
 
-//If you chose [goef], write below the value for the weight "w" and
-//the parameter "ni". It must be written as a row vector ("w" "ni"):
-
+// Se [goef]: peso "w" e parametro "ni" (vetor linha "w ni").
 0.1 0.3
 
-//--------------------------------------------------------------------
-//Orders for the Approximations (space and time)
-
-//Write below the Order for the Hyperbolic Operator approximation.
-//It must be up to 6th order: 
-
+// Ordem da aproximacao do operador hiperbolico (ate 6a ordem).
 1
 
-//Write below the type of approximation for the time term: 
-//[1] ==> "Forward Euler"; 
-//[2] ==> "Runge-Kutta 2";
-//[3] ==> "Runge-Kutta 3";
-//[4] ==> "Runge-Kutta 4".
-
+// Aproximacao do termo temporal:
+//   [1] Euler Explicito | [2] Runge-Kutta 2
+//   [3] Runge-Kutta 3   | [4] Runge-Kutta 4
 1
 
-//--------------------------------------------------------------------
-//Strategies for the Variable Reconstruction 
-
-//***OBS.: It works only for order bigger than 1.
-
-//Choose which type of recovery strategy do you want:
-//[tse] ==> "Taylor Serie Expansion";
-//[cpr] ==> "Correction Procedure via Reconstruction";
-//[ggg] ==> "Green-Gauss Gradient" (Durlofsky et al., 1992).
-
+// Estrategia de reconstrucao de variaveis (so importa se ordem > 1):
+//   [tse] Expansao em Serie de Taylor
+//   [cpr] Correction Procedure via Reconstruction
+//   [ggg] Green-Gauss Gradient
 tse
 
-//-------------------------
-//Least Squares Parameters:
-//If you chose [tse], define the type of vicinity for the Least 
-//Squares reconstruction:
-//[1] ==> "Face Neighboring"; 
-//[2] ==> "Full Neighboring" (face and vertices).
-
+// Se [tse]: tipo de vizinhanca para Minimos Quadrados.
+//   [1] Vizinhos por face | [2] Vizinhanca completa (face + vertices)
 2
 
-//***OBS.: It works up to third order reconstruction. For the bigger
-//orders, Full Neighboring is mandatory.
-
-//If you chose [tse] and want to use weights for the Least Squares 
-//procedure, set a value for the inverse distance exponent. Setting 
-//"0" means NO Weighted Least Squares.
-
+// Se [tse]: expoente da distancia inversa para peso.
+// "0" = Minimos Quadrados sem peso.
 1
 
-//--------------------------------------------------------------------
-//Limiting Strategies and Greek Correction
-
-//***OBS.: It is not necessary for One-Phase Flow applications. 
-
-//-------------------
-//Edge-based Limiter:
-//Is there an Edge-based Limiter? [y] ==> "yes"; [n] ==> "no".
-
+// Ha Limitador tipo Edge-based? [y]/[n]
 n
 
-//If [y], choose among the Edge-Based limiters below:
-//[mm] ==> "MinMod";
-//[sb] ==> "SuperBee";
-//[bj] ==> "Barth-Jespersen";
-//[va1] ==> "vanAlbada 1" (see vanAlbada et al., 1982);
-//[va2] ==> "vanAlbada 2" (see L hner, 2001); 
-//[vl1] ==> "vanLeer 1";
-//[vl2] ==> "vanLeer 2" (see Berger, 2005);
-//[nl2] ==> "new Limiter type 2" (see Mandal, 2008);
-//[nl3] ==> "new Limiter type 3" (see Mandal, 2008).
-
+// Se [y], tipo de limitador:
+//   [mm] MinMod | [sb] SuperBee | [bj] Barth-Jespersen
+//   [va1]/[va2] vanAlbada | [vl1]/[vl2] vanLeer
+//   [nl2]/[nl3] Novo Limitador (Mandal, 2008)
 va2
 
-//Write below the type of Gradient Interpolation (Blasek, 2001):
-//[-1] ==> "Higher Order Upwind"; [0] ==> "Centered Scheme".
-
+// Tipo de interpolacao do gradiente: [-1] Upwind de ordem maior
+// | [0] Esquema centrado
 0.3333333
 
-//--------------------
-//Patch-based Limiter:
-//Is there a Patch-based Limiter? [y] ==> "yes"; [n] ==> "no"
-
+// Ha Limitador tipo Patch-based? [y]/[n]
 y
 
-//If [y], choose among the Patch-Based limiters below:
-//[wf] ==> "Woodfield Strategy";
-//[mlp] ==> "Multidimensional Limiting Process";
-//[mlp_vk] ==> "MLP, type Venkathakrishnen (see Park and Kim, 2012).
-
+// Se [y], tipo de limitador:
+//   [wf] Estrategia Woodfield | [mlp] Multidimensional Limiting Process
+//   [mlp_vk] MLP tipo Venkathakrishnen
 mlp
 
-//If you chose [wf], write below the additional parameter ("delta"):
-
+// Se [wf]: parametro adicional "delta".
 0.2
 
-//------------
-// traditional MUSCL method 
-//do you wnat to turn the MUSCL? [y]==> "yes"; [n]==> "no"
-
+// Usar o metodo MUSCL tradicional? [y]/[n]
 y
 
-//-----------------
-//Greek Correction:
-//Do you want to turn the Greek Correction on? (Delis and Nikolos,
-//2012) [y] ==> "yes"; [n] ==> "no"
-
+// Ativar a Correcao Grega (Delis e Nikolos, 2012)? [y]/[n]
 n
 
-//--------------
-//MOOD Strategy:
-//Do you want to turn the MOOD on? [y] ==> "yes"; [n] ==> "no".
-
+// Ativar estrategia MOOD? [y]/[n]
 n
 
-//If [y], write below the type of the MOOD strategy (see Clain et 
-//al., 2012): 
-//[1] ==> "Minimum order value between those sharing the face"; 
-//[2] ==> "Minimum order value among those ones suronding the CV".
-
+// Se [y]: tipo de estrategia MOOD.
+//   [1] Menor ordem entre os que compartilham a face
+//   [2] Menor ordem entre os que cercam o volume de controle
 1
 
-//------------
-// MUSCL post limit method
-//do you wnat to turn the PL? [y]==> "yes"; [n]==> "no"
-
+// Ativar MUSCL com pos-limitacao (PL)? [y]/[n]
 n
 
-//------------
-//MOOD stratgey with MUSCL post limit method
-//do you wnat to turn the MOOD - PL? [y]==> "yes"; [n]==> "no"
-
+// Ativar MOOD com pos-limitacao MUSCL (MOOD-PL)? [y]/[n]
 n
 
-//------------
-// LP-MUSCL strategy
-//do you wnat to turn the U-MUSCL? [y]==> "yes"; [n]==> "no"
-
+// Ativar estrategia LP-MUSCL (U-MUSCL)? [y]/[n]
 n
 
-//--------------------------------------------------------------------
-//Type of Reimann solver
-//Write below the type of Reimann solver: 
-//[srn] ==> "Serna Method"; 
-//[enfix] ==> "entropyfix method";
-//[llf] ==> "Local Lax Friedrich method"; 
-//[llfm] ==> "Modified Local Lax Friedrich method"; 
-//[upwd] ==> "upwind method"; 
-//[hll] ==> " Harten-Lax-van Leer method"; 
-
+// Tipo de solver de Riemann:
+//   [srn] Metodo de Serna | [enfix] Entropy Fix
+//   [llf] Local Lax-Friedrichs | [llfm] LLF Modificado
+//   [upwd] Upwind | [hll] Harten-Lax-van Leer
 upwd
 
-//--------------------------------------------------------------------
-//------------------- Geometry and Mesh Properties -------------------
-//--------------------------------------------------------------------
 
-//If [y], write below the path where the mesh file is:
- 
+//======================================================================
+//  BLOCO 4 - MALHA
+//======================================================================
+
+//----------------------------------------------------------------------
+// Caminho da pasta onde esta o arquivo de malha.
+//----------------------------------------------------------------------
+                                                        // >>> EDITE AQUI <<<
 C:\Users\flc59\Documents\Malhas2
 
-//Write below the name of the mesh file. Use the extension *.msh: 
-//HermelineMeshModQuad_12_12, edwards_8_8
-
+//----------------------------------------------------------------------
+// Nome do arquivo de malha (extensao .msh).
+//----------------------------------------------------------------------
+                                                        // >>> EDITE AQUI <<<
 mesh_clement_quad.msh
 
-//--------------------------------------------------------------------
-//----------------------- Physical Parameters ------------------------
-//--------------------------------------------------------------------
 
-//--------------------------------------------------------------------
-//Density of fluid(s):
-// Water and oil must be the order. 
+//======================================================================
+//  BLOCO 5 - PARAMETROS FISICOS
+//======================================================================
 
-1000 100        
+//----------------------------------------------------------------------
+// Densidade dos fluidos (agua, oleo), nessa ordem.
+//----------------------------------------------------------------------
+                                                        // >>> EDITE AQUI <<<
+1000 100
 
-//--------------------------------------------------------------------
-//Viscosity of fluids considered (cP):
-// Water and Concentration must be the order. 
+//----------------------------------------------------------------------
+// Viscosidade dos fluidos em cP (agua, concentracao), nessa ordem.
+//----------------------------------------------------------------------
+                                                        // >>> EDITE AQUI <<<
+0.001 0.001
 
-0.001 0.001     
-
-//--------------------------------------------------------------------
-//Unredutible water sat. (Swr) and residual oil sat. (Sor):
-
-//***OBS.: It is necessary only for two-phase flow applications. 
-
-//Write below the value of unredutible water saturation (Swr) and,
-//in sequence, the value of residual oil saturation (Sor):
-
+//----------------------------------------------------------------------
+// Saturacao de agua irredutivel (Swr) e saturacao residual de oleo
+// (Sor). So necessario para escoamento bifasico.
+//----------------------------------------------------------------------
+                                                        // >>> EDITE AQUI <<<
 0 0
 
-//--------------------------------------------------------------------
-//Distribution of permeability tensor k (Darcy):
-
-//Is your media highly heterogeneous?
-//[r] ==> "yes with random value";
-//[y] ==> "yes" (each control volume has a permeability value); 
-//[n] ==> "no" (the permeability value is attributed to layer(s)).
-
+//----------------------------------------------------------------------
+// O meio poroso e altamente heterogeneo?
+//   [r] sim, com valor aleatorio
+//   [y] sim, cada volume de controle tem seu proprio valor
+//   [n] nao (o valor e atribuido por camada)
+//----------------------------------------------------------------------
+                                                        // >>> EDITE AQUI <<<
 y
 
-//IMPORTANT: quando o problema é homogeneo
-
+//----------------------------------------------------------------------
+// Tensor de permeabilidade k (Darcy). Se o problema for homogeneo,
+// informe os 4 componentes: kxx kxy kyx kyy.
+//----------------------------------------------------------------------
+                                                        // >>> EDITE AQUI <<<
 35 0 0 35
 
-//--------------------------------------------------------------------
-//Distribution of porosity:
+//----------------------------------------------------------------------
+// Porosidade.
+//----------------------------------------------------------------------
+                                                        // >>> EDITE AQUI <<<
+0.2
 
-0.2      
-
-//--------------------------------------------------------------------
-//Gravity and Capilarity: [y] yes, [n] no
-
+//----------------------------------------------------------------------
+// Considerar Gravidade? [y]/[n]
+//----------------------------------------------------------------------
+                                                        // >>> EDITE AQUI <<<
 n
 
-//write below the gravity vector (in the same row: gx gy gz):
-
+// Vetor gravidade (gx gy gz), na mesma linha.
 0 10 0
 
-//CAPILARITY for your Mathematic Model: [y] yes, [n] no
-
+//----------------------------------------------------------------------
+// Considerar Capilaridade? [y]/[n]
+//----------------------------------------------------------------------
+                                                        // >>> EDITE AQUI <<<
 n
 
-//write below the Corey Model Exponent:
-
+// Expoente do Modelo de Corey.
 0
 
-//--------------------------------------------------------------------
-//----------------------- Convergence Criteria -----------------------
-//--------------------------------------------------------------------
 
-//Some parameters must be set in order to control the convergence 
-//procedure. The Courant number and the total simulation time are, 
-//some examples.
+//======================================================================
+//  BLOCO 6 - CRITERIOS DE CONVERGENCIA
+//======================================================================
 
-//--------------------------------------------------------------------
-//Courant Number
-
-//The Courant number will be used as a stability parameter of the 
-//hyperbolic saturation equation. Write below the Courant number:
-
+//----------------------------------------------------------------------
+// Numero de Courant (estabilidade da equacao hiperbolica).
+//----------------------------------------------------------------------
+                                                        // >>> EDITE AQUI <<<
 0.9
 
-//--------------------------------------------------------------------
-//Unity for Time (only for Two-Phase Simulation): 
-
-//Write below the time unity for the simulation:
-//[s] ==> "to dimentional time" (seconds, days, etc); 
-//[pvi] ==> "to non-dmentional time" (Pore Volume Injected). 
-
+//----------------------------------------------------------------------
+// Unidade de tempo (apenas para simulacao Bifasica):
+//   [s] tempo dimensional (segundos, dias, etc.)
+//   [pvi] tempo adimensional (Volume Poroso Injetado)
+//----------------------------------------------------------------------
+                                                        // >>> EDITE AQUI <<<
 s
 
-//--------------------------------------------------------------------
-//Total time of simulation (days) or PVI's value (adm)
-
-//This parameter denots either the time of simulation or the value 
-//of Pore Volume Injected. This value will be used in the unstead
-//state simulation (parameter of stop). Write below the amount of 
-//days or the PVI's value instead:
-
+//----------------------------------------------------------------------
+// Tempo total de simulacao (dias) ou valor de PVI, conforme a
+// unidade escolhida acima.
+//----------------------------------------------------------------------
+                                                        // >>> EDITE AQUI <<<
 2
 
-//--------------------------------------------------------------------
-//------------------------ Boundary Condition ------------------------
-//--------------------------------------------------------------------
 
-//--------------------------------------------------------------------
-//Treatment of Boundary Faces: 
+//======================================================================
+//  BLOCO 7 - CONDICOES DE CONTORNO
+//======================================================================
 
-//Use the following nomenclature to classify the type of BC:
-//[101 to 200] ==> "Dirichlet Boundary Condition"; 
-//[201 to 300] ==> "Neumann Boundary Condition";
-//[601 to 700] ==> "Periodic Boundary Condition" (only hyperbolic).
-
-//For a general attribution, write the sequense below:
-//1. The amount of boundary condition statment;
-//2. In another row, write the type of boundary condition 
-//(Dirichlet, Neumann or Periodic);
-//3. In the same row, put the algebric value of this BC.
-//4. When the Dirichlet contour receives a function, set flag 123456.
-
+//----------------------------------------------------------------------
+// Condicoes de contorno nas FACES da malha.
+//   [101-200] Dirichlet | [201-300] Neumann | [601-700] Periodica (so hiperbolica)
+//
+// Formato:
+//   1) quantidade de condicoes de contorno abaixo
+//   2) uma linha por condicao: "codigo valor"
+//      (se o contorno Dirichlet receber uma funcao, use o codigo 123456)
+//----------------------------------------------------------------------
+                                                        // >>> EDITE AQUI <<<
 3
 201 0
 101 65
-202 14.8     
+202 14.8
 
-//--------------------------------------------------------------------
-//Treatment of Boundary Points
-
-//For to attribute boundary condition in each point of geometry you 
-//must write below as follows: 
-//1. The amount of boundary condition statment (for geometric POINT);
-//2. In another row, the sequence of codes to be associated with 
-//each point group. 
-
+//----------------------------------------------------------------------
+// Condicoes de contorno nos PONTOS (vertices) da geometria.
+//
+// Formato:
+//   1) quantidade de condicoes de contorno abaixo
+//   2) uma linha com os codigos associados a cada grupo de pontos
+//----------------------------------------------------------------------
+                                                        // >>> EDITE AQUI <<<
 3
 201 101 202
