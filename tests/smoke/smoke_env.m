@@ -19,7 +19,7 @@ fs_expect(isfolder(fullfile(pwd, 'meshes')) || any(~cellfun(@isempty, {dir('*.ms
     'mesh files reachable (either meshes/ subdir or root .msh)');
 
 nRoot = numel(dir('*.m'));
-fs_expect(nRoot > 200, sprintf('root .m file count is >200 (got %d)', nRoot));
+fs_expect(nRoot > 100, sprintf('root .m file count is >100 (got %d — down from 285 pre-cleanup)', nRoot));
 
 fs_expect(exist('preprocessormod', 'file') == 2, ...
     'preprocessormod is on path (canonical mesh preprocessor)');
