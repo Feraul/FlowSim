@@ -53,9 +53,37 @@ function FS = buildCornerShifts(FS)
     wrapMask = cornerIsLast & isInteriorCorner;
     tNext(wrapMask) = tBase(wrapMask) + 1;   % T(1) of the same node
 
-    FS.csr.cornerLocal    = cornerLocal;
-    FS.csr.cornerIsLast   = cornerIsLast;
-    FS.csr.nodeIsInterior = nodeIsInterior;
-    FS.csr.tCurrent       = tCurrent;
-    FS.csr.tNext          = tNext;
+    % cornerPrev: flat CORNER index (into the corner arrays) of "k-1" within
+    % the same node. For interior FIRST corner (k=1), wrap to LAST corner of
+    % the same node. For boundary FIRST corner, no wrap — set to sentinel
+    % (points to itself, so caller must guard for boundary first corners).
+    cornerFlatIdx = (1:FS.csr.nCorners).';
+    cornerIsFirst = (cornerLocal == 1);
+    cornerBase    = esurn2(FS.csr.cornerNode);   % 0-based corner base for each corner
+    cornerPrev = cornerFlatIdx - 1;              % default: previous flat corner
+    % For interior first corner: wrap to last corner of same node
+    interiorFirstMask = cornerIsFirst & isInteriorCorner;
+    cornerPrev(interiorFirstMask) = ...
+        cornerBase(interiorFirstMask) + nec(FS.csr.cornerNode(interiorFirstMask));
+    % For boundary first corner: sentinel (caller must handle)
+    boundaryFirstMask = cornerIsFirst & ~isInteriorCorner;
+    cornerPrev(boundaryFirstMask) = cornerFlatIdx(boundaryFirstMask);   % points to self
+
+    % cornerNext: flat CORNER index of "k+1". Interior wraps, boundary steps.
+    cornerNext = cornerFlatIdx + 1;
+    cornerNext(wrapMask) = cornerBase(wrapMask) + 1;   % first corner of same node
+    % For boundary LAST corner: sentinel
+    boundaryLastMask = cornerIsLast & ~isInteriorCorner;
+    cornerNext(boundaryLastMask) = cornerFlatIdx(boundaryLastMask);
+
+    FS.csr.cornerLocal      = cornerLocal;
+    FS.csr.cornerIsFirst    = cornerIsFirst;
+    FS.csr.cornerIsLast     = cornerIsLast;
+    FS.csr.nodeIsInterior   = nodeIsInterior;
+    FS.csr.tCurrent         = tCurrent;
+    FS.csr.tNext            = tNext;
+    FS.csr.cornerPrev       = cornerPrev;
+    FS.csr.cornerNext       = cornerNext;
+    FS.csr.boundaryFirstMask = boundaryFirstMask;
+    FS.csr.boundaryLastMask  = boundaryLastMask;
 end
