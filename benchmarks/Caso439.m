@@ -284,8 +284,10 @@ classdef Caso439 < SimulacaoBase
             extras.centro6 = find((155<centelem(:,2) & centelem(:,2)<160) & ...
                 (centelem(:,1)>160 & centelem(:,1)<165));
 
-            % persiste indices para proxima simulacao (mesma malha)
-            save('indices_elementos_quadrilateral.mat', '-struct', 'extras');
+            % persiste indices para proxima simulacao (mesma malha) — cache em data/
+            cacheDir = fullfile(fileparts(fileparts(mfilename('fullpath'))), 'data');
+            if ~exist(cacheDir, 'dir'), mkdir(cacheDir); end
+            save(fullfile(cacheDir, 'indices_elementos_quadrilateral.mat'), '-struct', 'extras');
 
             % series temporais — linha t=0
             theta_init_num = thetafunction(parms.h_init, parms, env);
