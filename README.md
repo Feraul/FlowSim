@@ -15,6 +15,11 @@ Pre-campaign state is preserved as
 [`v1.0.0-pre-vectorization`](https://github.com/Feraul/FlowSim/releases/tag/v1.0.0-pre-vectorization)
 (+ backup branch `legacy-v1.0`). See [`CHANGELOG.md`](CHANGELOG.md).
 
+> **Coming from v1?** Read [`docs/for-scientists.md`](docs/for-scientists.md)
+> — plain-language guide covering what stayed the same, what moved, how to
+> verify your `Caso NNN` still produces the same numbers, and how to
+> disable every new module if you want pure-v1 behaviour.
+
 - **LPEW2** pipeline: fully vectorized (`+fs/+lpew/+v2/`), bit-identical to
   legacy at 1e-15 relative tolerance
 - **MPFA-D** assembly: fully vectorized (`+fs/+assembly/+mpfad/`),
@@ -77,6 +82,7 @@ tools/mrun -c $(pwd) tests/unit/unit_baseline_reproduces.m
 
 | Doc | For | Content |
 |---|---|---|
+| ★ [`docs/for-scientists.md`](docs/for-scientists.md) | **maintainers / users coming from v1** | plain-language guide: what stayed the same, what moved, how to verify your case matches v1 numerics |
 | [`docs/how-to-use.md`](docs/how-to-use.md) | users | install, configure `Start.dat`, run, troubleshoot |
 | [`docs/code-map.md`](docs/code-map.md) | contributors | where every function lives + who calls whom |
 | [`docs/vectorization-guide.md`](docs/vectorization-guide.md) | contributors | recipe for extending `+fs/` with a new module |
