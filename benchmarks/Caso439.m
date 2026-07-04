@@ -1,21 +1,21 @@
 classdef Caso439 < SimulacaoBase
-%--------------------------------------------------------------------------
-% Caso439 — Processo de Recarga de Aquífero 2D
-%
-% Modelo físico: Richards não-linear com permeabilidade relativa
-%                de Brooks-Corey
-%
-% Parâmetros:
-%   theta_s = 0.3   (umidade de saturação)
-%   theta_r = 0.0   (umidade residual)
-%   c       = 40000 (parâmetro de forma de Brooks-Corey)
-%   D       = 2.9   (expoente de Brooks-Corey)
-%
-% Condições de contorno:
-%   flag 1 → Dirichlet fixo (bcflag)
-%   flag 2 → Dirichlet variável: h = 65 - z
-%   flag 3 → Dirichlet zero (superfície livre)
-%--------------------------------------------------------------------------
+    %--------------------------------------------------------------------------
+    % Caso439 — Processo de Recarga de Aquífero 2D
+    %
+    % Modelo físico: Richards não-linear com permeabilidade relativa
+    %                de Brooks-Corey
+    %
+    % Parâmetros:
+    %   theta_s = 0.3   (umidade de saturação)
+    %   theta_r = 0.0   (umidade residual)
+    %   c       = 40000 (parâmetro de forma de Brooks-Corey)
+    %   D       = 2.9   (expoente de Brooks-Corey)
+    %
+    % Condições de contorno:
+    %   flag 1 → Dirichlet fixo (bcflag)
+    %   flag 2 → Dirichlet variável: h = 65 - z
+    %   flag 3 → Dirichlet zero (superfície livre)
+    %--------------------------------------------------------------------------
 
     properties
         Nome   = 'Processo de Recarga'   % nome legível para log
@@ -267,7 +267,7 @@ classdef Caso439 < SimulacaoBase
         % e inicializa as series temporais de h e theta
         function [parms, extras] = inicializar(obj, env, parms, time)
             centelem = env.geometry.centelem;
-
+            
             % pontos de monitoramento — coluna x=11 (pontos 1,2,3)
             extras.centro1 = find((105<centelem(:,2) & centelem(:,2)<110) & ...
                 (centelem(:,1)>10  & centelem(:,1)<15));
@@ -352,26 +352,306 @@ classdef Caso439 < SimulacaoBase
         % Plota os resultados apos o loop temporal:
         %   fig 2: perfil de water content na coluna x=20
         %   fig 5-6: series temporais de h e theta na coluna x=11
-        function finalizar(obj, env, extras, theta_n)
+        function finalizar(obj, env, extras, theta_n,theta_init_num)
             centelem = env.geometry.centelem;
 
-            figure(2);
-            idx    = centelem(:,2)<200 & centelem(:,1)>20 & centelem(:,1)<25;
-            centro = find(idx);
-            plot(theta_n(centro), centelem(centro,2));
-            xlabel('Water Content'); ylabel('Z'); grid;
 
-            figure(5);
-            plot(extras.h_time1(:,1), extras.h_time1(:,2)); hold on;
-            plot(extras.h_time2(:,1), extras.h_time2(:,2)); hold on;
-            plot(extras.h_time3(:,1), extras.h_time3(:,2));
-            xlabel('Time'); ylabel('Water Pressure'); title('x=11'); grid;
+            figure(1)
+            % tempo=2
+            A1=[300.0  65.0;
+                100.0  70.0656;
+                28.9426 78.4877];
+            plot(A1(:,1), A1(:,2),'o')
+            hold on
 
-            figure(6);
-            plot(extras.h_time1(:,1), extras.h_time1(:,3)); hold on;
-            plot(extras.h_time2(:,1), extras.h_time2(:,3)); hold on;
-            plot(extras.h_time3(:,1), extras.h_time3(:,3));
-            xlabel('Time'); ylabel('Water content'); title('x=11'); grid;
+            B1=[0	80
+                5.93714	79.9302
+                11.5250	79.9302
+                17.4622	79.5812
+                22.7008	78.8831
+                27.9395	78.5340
+                35.2736	77.4869
+                42.2584	76.4398
+                49.5925	75.7417
+                58.3236	74.3456
+                65.6577	73.2984
+                76.1350	71.9023
+                100.233	69.4590
+                112.806	68.0628
+                129.220	67.0157
+                139.697	65.9686
+                150.524	65
+                300.000	65
+                ];
+            plot(B1(:,1), B1(:,2),'-')
+            hold on
+            % tempo=3
+            A2=[300	65
+                161.698	75.5158
+                70.00	91.5765
+                2.28041	    100];
+            plot(A2(:,1), A2(:,2),'o')
+            hold on
+            B2=[0	100
+                11.0337	99.9812
+                23.5784	99.3283
+                33.3361	97.9411
+                46.2305	95.8582
+                57.0343	93.7729
+                68.8838	91.3391
+                80.0365	88.9046
+                91.5371	86.8201
+                104.780	84.3880
+                123.599	81.6127
+                142.765	79.1875
+                164.371	76.0
+                196.779	73.3064
+                228.141	70.5457
+                266.473	67.0939
+                300	65.0];
+            plot(B2(:,1), B2(:,2),'-')
+            hold on
+            % tempo=4
+            A3=[300	65
+                161.698	82.5585
+                129.780	89.98
+                70.00	101.622
+                2.28041	110];
+            plot(A3(:,1), A3(:,2),'o')
+            hold on
+            B3=[0	110
+                9.28058	109.610
+                19.3859	108.923
+                28.0979	107.886
+                39.2497	106.154
+                53.1902	103.378
+                67.1311	100.253
+                82.4658	97.1292
+                95.7094	94.3523
+                112.438	90.8814
+                126.378	88.8034
+                146.242	85.6851
+                183.879	80.4933
+                233.364	73.9191
+                300	65];
+            plot(B3(:,1), B3(:,2),'-')
+            hold on
+            % tempo=8
+
+            A4=[300	65
+                161.698	95.2342
+                129.780	102.227
+                70.0	114.354
+                36.6371	119.324
+                11.6036	119.705
+                2.28041	120];
+            plot(A4(:,1), A4(:,2),'o')
+            hold on
+
+            B4=[0.697674	120
+                9.41860	119.930
+                36.2791	118.531
+                72.9070	110.839
+                103.953	103.497
+                134.302	97.2028
+                162.907	91.6084
+                215.930	81.8182
+                257.093	73.4266
+                300.000	65];
+
+            plot(B4(:,1), B4(:,2),'-')
+
+            xlabel('Aquifer Lenght')
+            ylabel('Z')
+            grid
+            %--------------------------------------------------------------------------
+            figure(2)
+            % centro 21
+            idx = (centelem(:,2) < 200) & (centelem(:,1) > 20 & centelem(:,1) < 25);
+            centro = (1:size(centelem,1))';
+            centro = centro(idx);
+
+            theta=theta_n(centro);
+
+            centroY=centelem(centro,2);
+
+            plot(theta, centroY)
+            hold on
+
+            plot(theta_init_num(centro),centroY)
+            hold on
+            % theta experimental x=20, t=0
+            T1=[0.309198	200-130.634
+                0.304946	200-121.653
+                0.319766	200-111.612
+                0.143656	200-100.410
+                0.142113	200-90.3880
+                0.0642259	200-81.4914
+                0.0558460	200-70.4409
+                0.0406789	200-61.1264
+                0.0473110	200-50.7499
+                0.0307680	200-40.7457
+                0.0156071	200-31.7768
+                0.00315489	200-21.7679
+                0.00980558	200-12.4283
+                ];
+            plot(T1(:,1), T1(:,2),'o')
+            hold on
+
+            % theta experimental x=20. t=8
+
+            T2=[0.318210	200-100.900
+                0.297576	200-90.9002
+                0.279670	200-80.8976
+                0.268581	200-70.8871
+                0.269765	200-60.8625
+                0.243677	200-50.8693
+                0.238030	200-40.1613
+                0.239239	200-31.5192
+                0.245877	200-21.4883
+                0.249801	200-12.1518];
+            plot(T2(:,1), T2(:,2),'o')
+            xlabel('Water Content')
+            ylabel('Z')
+            grid
+            %-------------------------------------------------------------------------
+            figure(3)
+            idx = (centelem(:,2) < 200) & (centelem(:,1) > 80 & centelem(:,1) < 85);
+            centro_80 = (1:size(centelem,1))';
+            centro_80 = centro_80(idx);
+
+            theta_80=theta_n(centro_80);
+
+            centroY_80=centelem(centro_80,2);
+
+            plot(theta_80, centroY_80)
+            hold on
+            plot(theta_init_num(centro_80),centroY_80)
+            hold on
+            % theta experimental x=80. t=0
+            T3=[0.313699	200-121.724
+                0.324658	200-110.690
+                0.121918	200-100.345
+                0.153425	200-91.3793
+                0.0684932	200-81.3793
+                0.0602740	200-71.3793
+                0.0821918	200-61.3793
+                0.0917808	200-50.6897
+                0.0397260	200-41.0345
+                0.0383562	200-31.0345
+                0.0260274	200-21.7241
+                0.00273973	200-11.3793];
+
+            plot(T3(:,1), T3(:,2),'o')
+            hold on
+
+            % theta experimental x=80. t=8
+            T4=[0.319178	200-100.345
+                0.321918	200-91.0345
+                0.280822	200-81.0345
+                0.184932	200-71.7241
+                0.212329	200-60.6897
+                0.215068	200-51.3793
+                0.163014	200-41.3793
+                0.157534	200-31.3793
+                0.135616	200-21.0345
+                0.135616	200-11.3793
+                0.116438	200-3.10345];
+            plot(T4(:,1), T4(:,2),'o')
+            xlabel('Water Content')
+            ylabel('Z')
+            grid
+
+            %--------------------------------------------------------------------------
+            figure(4)
+
+            idx = (centelem(:,2) < 200) & (centelem(:,1) > 140 & centelem(:,1) < 145);
+            centro_140 = (1:size(centelem,1))';
+            centro_140 = centro_140(idx);
+
+            theta_140=theta_n(centro_140);
+
+            centroY_140=centelem(centro_140,2);
+
+            plot(theta_140, centroY_140)
+            hold on
+            plot(theta_init_num(centro_140),centroY_140)
+            hold on
+            % theta experimental x=140. t=0
+            T3=[0.271622	200-121.379
+                0.239189	200-111.379
+                0.187838	200-101.034
+                0.101351	200-91.3793
+                0.0729730	200-80.3448
+                0.0581081	200-71.3793
+                0.0567568	200-60.3448
+                0.0432432	200-51.0345
+                0.0391892	200-41.0345
+                0.0162162	200-21.7241
+                0.0148649	200-10.6897
+                ];
+
+            plot(T3(:,1), T3(:,2),'o')
+            grid
+
+
+            % theta experimental x=140. t=8
+            T4=[0.278378	200-112.069
+                0.314865	200-101.379
+                0.275676	200-91.0345
+                0.259459	200-81.0345
+                0.228378	200-71.3793
+                0.117568	200-60.3448
+                0.0743243	200-51.0345
+                0.0527027	200-41.3793
+                0.0432432	200-31.7241
+                0.0135135	200-21.7241];
+            plot(T4(:,1), T4(:,2),'o')
+
+            figure(5)
+            plot(extras.h_time1(:,1),extras.h_time1(:,2))
+            hold on
+            plot(extras.h_time2(:,1),extras.h_time2(:,2))
+            hold on
+            plot(extras.h_time3(:,1),extras.h_time3(:,2))
+
+            xlabel('Time')
+            ylabel('Water Pressure ')
+            title('x=11')
+            grid
+
+            figure(6)
+            plot(extras.h_time1(:,1),extras.h_time1(:,3))
+            hold on
+            plot(extras.h_time2(:,1),extras.h_time2(:,3))
+            hold on
+            plot(extras.h_time3(:,1),extras.h_time3(:,3))
+            xlabel('Time')
+            ylabel('Water content ')
+            title('x=11')
+            grid
+
+            figure(7)
+            plot(extras.h_time4(:,1),extras.h_time4(:,2))
+            hold on
+            plot(extras.h_time5(:,1),extras.h_time5(:,2))
+            hold on
+            plot(extras.h_time6(:,1),extras.h_time6(:,2))
+
+            xlabel('Time')
+            ylabel('Water Pressure ')
+            title('x=161')
+            grid
+            figure(8)
+            plot(extras.h_time4(:,1),extras.h_time4(:,3))
+            hold on
+            plot(extras.h_time5(:,1),extras.h_time5(:,3))
+            hold on
+            plot(extras.h_time6(:,1),extras.h_time6(:,3))
+            xlabel('Time')
+            ylabel('Water Content ')
+            title('x=161')
+            grid
         end
 
         % ── 16. Escrita de resultados em arquivo ──────────────────

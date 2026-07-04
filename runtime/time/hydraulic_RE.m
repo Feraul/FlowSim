@@ -96,7 +96,7 @@ while stopcriteria < 100
     % Richards nao-linear: K(h) muda a cada passo de tempo
     % PLUG_kfunction   → recalcula kmap com novo h (via benchmark.configurarPermeabilidade)
     % atualizarPremethod → recalcula Kde, Ded, Kn, Kt, pesos LPEW2 com novo kmap
-    [env] = PLUG_kfunction(env, parms, time);
+    [env,parms] = PLUG_kfunction(env, parms, time);
     [env] = metodo.atualizarPremethod(env, parms);
 
     %% ── 6. Atualiza flags se necessario ──────────────────────────
@@ -126,7 +126,7 @@ toc
 % delega ao benchmark: plots de h(t), theta(z), frentes de umidade, erros L2
 % ex: caso 439 → figures 2,5,6,7,8
 % ex: caso 437 → plots de massa total, erro relativo, MBE
-env.benchmark.finalizar(env, extras, theta_n);
+env.benchmark.finalizar(env, extras, theta_n,theta_init);
 
 %% ── Escrita de resultados em arquivo ─────────────────────────────
 % trunca o storage ao tamanho real (count passos realizados)

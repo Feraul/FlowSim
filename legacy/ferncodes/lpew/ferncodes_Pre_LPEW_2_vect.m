@@ -53,29 +53,27 @@ for y = 1:nNodes
     O(:,1:2) = centpre(es1(es_idx),:);
 
     %% ── Angulos ──────────────────────────────────────────────────
-    ve1    = zeros(1,nec);
-    ve2    = zeros(1,nec);
-    theta1 = zeros(1,nec);
-    theta2 = zeros(1,nec);
+     ve2=zeros(1,es2(No+1)-es2(No));
+    ve1=zeros(1,es2(No+1)-es2(No));
+    theta2=zeros(1,es2(No+1)-es2(No));
+    theta1=zeros(1,es2(No+1)-es2(No));
 
-    for k = 1:nec
-        v0 = O(k,1:2) - Qo(1:2);
-        if k == nec && nns == nec
-            vetor1   = T(1,1:2)   - T(k,1:2);
-            vetorth2 = T(1,1:2)   - Qo(1:2);
+
+    for k=1:size(ve2,2),
+        %Determinação dos vetores necessários à obtenção dos cossenos:
+        v0=O(k,:)-Qo;
+        if (k==size(ve2,2))&&(size(P,1)==size(O,1))
+            vetorth2=T(1,:)-Qo;
+            vetor1=T(1,:)-T(k,:);
         else
-            vetor1   = T(k+1,1:2) - T(k,1:2);
-            vetorth2 = T(k+1,1:2) - Qo(1:2);
+            vetor1=T(k+1,:)-T(k,:);
+            vetorth2=T(k+1,:)-Qo;
         end
-        vetorth1 = T(k,1:2) - Qo(1:2);
-
-        nv1 = norm(vetor1);   nvh1 = norm(vetorth1);
-        nv2 = norm(vetorth2); nv0  = norm(v0);
-
-        ve1(k)    = acos(max(-1,min(1, dot(-vetorth1,vetor1)  /(nv1*nvh1) )));
-        ve2(k)    = acos(max(-1,min(1, dot(-vetorth2,-vetor1) /(nv1*nv2)  )));
-        theta1(k) = acos(max(-1,min(1, dot(v0,vetorth1)       /(nv0*nvh1) )));
-        theta2(k) = acos(max(-1,min(1, dot(v0,vetorth2)       /(nv0*nv2)  )));
+        vetorth1=T(k,:)-Qo;
+        ve1(k)=acos(dot(-vetorth1,vetor1)/(norm(vetor1)*norm(vetorth1))); % revisar esses signos
+        ve2(k)=acos(dot(-vetorth2,-vetor1)/(norm(vetor1)*norm(vetorth2)));
+        theta2(k)=acos(dot(v0,vetorth2)/(norm(v0)*norm(vetorth2)));
+        theta1(k)=acos(dot(v0,vetorth1)/(norm(v0)*norm(vetorth1)));
     end
 
     %% ── Netas — cross 2D (componente Z) sem cross() ─────────────
@@ -198,10 +196,12 @@ for y = 1:nNodes
             zeta(k) = zetan/zetad;
         end
         for k = 1:nec
-            if k == nec
-                lambda(k) = zeta(k)*Kn1(k,1)*netas(k,1) + zeta(1)*Kn1(k,2)*netas(k,2);
+            if (k==nec)&&(size(P,1)==size(O,1))
+                lambda(k)=zeta(k)*Kn1(k,1)*netas(k,1) + zeta(1)*Kn1(k,2)*netas(k,2);
+
             else
-                lambda(k) = zeta(k)*Kn1(k,1)*netas(k,1) + zeta(k+1)*Kn1(k,2)*netas(k,2);
+                lambda(k)=zeta(k)*Kn1(k,1)*netas(k,1) + zeta(k+1)*Kn1(k,2)*netas(k,2);
+
             end
         end
     end

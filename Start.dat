@@ -96,7 +96,7 @@ n
 //   [mpfao] MPFA tipo O | [fps] MPFA tipo FPS | [mpfae] MPFA Enriquecido
 //   [mpfad] MPFA Diamond | [mpfaql] MPFA-QL | [mpfah] MPFA-H
 //   [nlfvpp] Nao-Linear (lpew) | [nlfvh] Nao-Linear (ponto harmonico)
-tpfa
+mpfad
 
 // Se [fps] ou [mpfae]: fator do volume de controle auxiliar.
 0.2
@@ -221,7 +221,7 @@ C:\Users\flc59\Documents\Malhas2
 // Nome do arquivo de malha (extensao .msh).
 //----------------------------------------------------------------------
                                                         // >>> EDITE AQUI <<<
-mesh_clement_quad.msh
+mesh_clement_quad_distorcido.msh
 
 
 //======================================================================
