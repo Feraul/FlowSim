@@ -355,4 +355,4 @@ Critical fields:
 ## License / Attribution
 
 Original codebase by the UFPE groundwater flow group.  
-Vectorization campaign (2026): Artur Castiel Reis de Souza + AXON code-dev + Copilot.
+Vectorization campaign (2026): Fernando Contreras + Artur Castiel Reis de Souza + AXON code-dev + Copilot.
