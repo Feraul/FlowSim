@@ -14,7 +14,7 @@
 % automaticamente em todas as execucoes seguintes.
 
 
-% startup(); savepath();   % ← descomente apenas na primeira vez
+%startup(); savepath();   % ← descomente apenas na primeira vez
 
 clc;
 clear classes   % limpa o cache de classes OOP do MATLAB

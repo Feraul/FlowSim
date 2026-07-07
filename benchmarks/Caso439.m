@@ -194,11 +194,12 @@ classdef Caso439 < SimulacaoBase
             coef     = zeros(length(maskT),1);
             mask_neg = h_contorno < 0;
             mask_pos = h_contorno >= 0;
+            const=env.config.perm(1,1);
 
             % zona nao saturada: permeabilidade relativa de Brooks-Corey
-            coef(mask_neg) = 35 .* (2.99e6 ./ (2.99e6 + abs(h_contorno(mask_neg)).^5));
+            coef(mask_neg) = const .* (2.99e6 ./ (2.99e6 + abs(h_contorno(mask_neg)).^5));
             % zona saturada: permeabilidade plena
-            coef(mask_pos) = 35;
+            coef(mask_pos) = const;
 
             % aplica apenas nas faces de Dirichlet (maskT = bedge(:,5) < 200)
             K11 = auxkmap(matid,2).*(~maskT) + coef;
@@ -267,27 +268,47 @@ classdef Caso439 < SimulacaoBase
         % e inicializa as series temporais de h e theta
         function [parms, extras] = inicializar(obj, env, parms, time)
             centelem = env.geometry.centelem;
-            
+            elem=env.geometry.elem;
+            coord=env.geometry.coord;
             % pontos de monitoramento — coluna x=11 (pontos 1,2,3)
-            extras.centro1 = find((105<centelem(:,2) & centelem(:,2)<110) & ...
-                (centelem(:,1)>10  & centelem(:,1)<15));
-            extras.centro2 = find((130<centelem(:,2) & centelem(:,2)<135) & ...
-                (centelem(:,1)>10  & centelem(:,1)<15));
-            extras.centro3 = find((185<centelem(:,2) & centelem(:,2)<190) & ...
-                (centelem(:,1)>10  & centelem(:,1)<15));
+            % extras.centro1 = find((105<centelem(:,2) & centelem(:,2)<110) & ...
+            %     (centelem(:,1)>10  & centelem(:,1)<15));
+            % extras.centro2 = find((130<centelem(:,2) & centelem(:,2)<135) & ...
+            %     (centelem(:,1)>10  & centelem(:,1)<15));
+            % extras.centro3 = find((185<centelem(:,2) & centelem(:,2)<190) & ...
+            %     (centelem(:,1)>10  & centelem(:,1)<15));
+            %
+            % % pontos de monitoramento — coluna x=161 (pontos 4,5,6)
+            % extras.centro4 = find((80<centelem(:,2)  & centelem(:,2)<85)  & ...
+            %     (centelem(:,1)>160 & centelem(:,1)<165));
+            % extras.centro5 = find((115<centelem(:,2) & centelem(:,2)<120) & ...
+            %     (centelem(:,1)>160 & centelem(:,1)<165));
+            % extras.centro6 = find((155<centelem(:,2) & centelem(:,2)<160) & ...
+            %     (centelem(:,1)>160 & centelem(:,1)<165));
 
-            % pontos de monitoramento — coluna x=161 (pontos 4,5,6)
-            extras.centro4 = find((80<centelem(:,2)  & centelem(:,2)<85)  & ...
-                (centelem(:,1)>160 & centelem(:,1)<165));
-            extras.centro5 = find((115<centelem(:,2) & centelem(:,2)<120) & ...
-                (centelem(:,1)>160 & centelem(:,1)<165));
-            extras.centro6 = find((155<centelem(:,2) & centelem(:,2)<160) & ...
-                (centelem(:,1)>160 & centelem(:,1)<165));
+            % ponto 1
+            extras.centro1 = obj.elemento_no_ponto(elem, coord, 12.5, 107.5);
+
+            % ponto 2
+            extras.centro2 = obj.elemento_no_ponto(elem, coord, 12.5, 132.5);
+
+            % ponto 3
+            extras.centro3 = obj.elemento_no_ponto(elem, coord, 12.5, 187.5);
+
+            % ponto 4
+            extras.centro4 = obj.elemento_no_ponto(elem, coord, 162.5, 82.5);
+
+            % ponto 5
+            extras.centro5 = obj.elemento_no_ponto(elem, coord, 162.5, 117.5);
+
+            % ponto 6
+            extras.centro6 = obj.elemento_no_ponto(elem, coord, 162.5, 157.5);
+
 
             % persiste indices para proxima simulacao (mesma malha) — cache em data/
-            cacheDir = fullfile(fileparts(fileparts(mfilename('fullpath'))), 'data');
-            if ~exist(cacheDir, 'dir'), mkdir(cacheDir); end
-            save(fullfile(cacheDir, 'indices_elementos_quadrilateral.mat'), '-struct', 'extras');
+            %cacheDir = fullfile(fileparts(fileparts(mfilename('fullpath'))), 'data');
+            %if ~exist(cacheDir, 'dir'), mkdir(cacheDir); end
+            %save(fullfile(cacheDir, 'indices_elementos_quad.mat'), '-struct', 'extras');
 
             % series temporais — linha t=0
             theta_init_num = thetafunction(parms.h_init, parms, env);
@@ -354,6 +375,8 @@ classdef Caso439 < SimulacaoBase
         %   fig 5-6: series temporais de h e theta na coluna x=11
         function finalizar(obj, env, extras, theta_n,theta_init_num)
             centelem = env.geometry.centelem;
+            elem=env.geometry.elem;
+            coord=env.geometry.coord;
 
 
             figure(1)
@@ -467,9 +490,11 @@ classdef Caso439 < SimulacaoBase
             %--------------------------------------------------------------------------
             figure(2)
             % centro 21
-            idx = (centelem(:,2) < 200) & (centelem(:,1) > 20 & centelem(:,1) < 25);
-            centro = (1:size(centelem,1))';
-            centro = centro(idx);
+            %idx = (centelem(:,2) < 200) & (centelem(:,1) > 20 & centelem(:,1) < 25);
+            %centro = (1:size(centelem,1))';
+            %centro = centro(idx);
+
+            centro = obj.elementos_centroide_na_caixa(elem, coord, [-Inf 200], [20 25]);
 
             theta=theta_n(centro);
 
@@ -516,9 +541,11 @@ classdef Caso439 < SimulacaoBase
             grid
             %-------------------------------------------------------------------------
             figure(3)
-            idx = (centelem(:,2) < 200) & (centelem(:,1) > 80 & centelem(:,1) < 85);
-            centro_80 = (1:size(centelem,1))';
-            centro_80 = centro_80(idx);
+            %idx = (centelem(:,2) < 200) & (centelem(:,1) > 80 & centelem(:,1) < 85);
+            %centro_80 = (1:size(centelem,1))';
+            %centro_80 = centro_80(idx);
+
+            centro_80 = obj.elementos_centroide_na_caixa(elem, coord, [-Inf 200], [80 85]);
 
             theta_80=theta_n(centro_80);
 
@@ -565,9 +592,11 @@ classdef Caso439 < SimulacaoBase
             %--------------------------------------------------------------------------
             figure(4)
 
-            idx = (centelem(:,2) < 200) & (centelem(:,1) > 140 & centelem(:,1) < 145);
-            centro_140 = (1:size(centelem,1))';
-            centro_140 = centro_140(idx);
+            %idx = (centelem(:,2) < 200) & (centelem(:,1) > 140 & centelem(:,1) < 145);
+            %centro_140 = (1:size(centelem,1))';
+            %centro_140 = centro_140(idx);
+
+            centro_140 = obj.elementos_centroide_na_caixa(elem, coord, [-Inf 200], [140 145]);
 
             theta_140=theta_n(centro_140);
 
@@ -662,14 +691,88 @@ classdef Caso439 < SimulacaoBase
             centelem  = env.geometry.centelem;
             filepath  = env.mainpathfolders.path;
             tabfolder = env.mainpathfolders.tabfolder;
-            fname     = [filepath '\' tabfolder '\'];
+            fname = fullfile(filepath, tabfolder);
 
             writematrix(h_storage,     [fname 'h_steptime3.txt']);
             writematrix(theta_storage, [fname 'WaterContent_steptime3.txt']);
             writematrix(centelem,      [fname 'centrocell3.txt']);
             writematrix(time_storage,  [fname 'time_step3.txt']);
             writematrix(kmap_storage,  [fname 'condhydraulic_steptime3.txt']);
+
+        end
+    end
+
+    methods(Static)
+
+        function idx = elemento_no_ponto(elem, coord, px, py)
+            % Retorna o índice do elemento que contém o ponto (px,py)
+            % elem  : matriz de conectividade (colunas 1:4 = nós, coluna 5 = material)
+            %         triângulos têm elem(:,4) == 0
+            % coord : coordenadas dos nós
+            % px,py : coordenadas do ponto de interesse (escalares)
+
+            n1 = elem(:,1);
+            n2 = elem(:,2);
+            n3 = elem(:,3);
+            n4 = elem(:,4);
+
+            isTri = (n4 == 0);
+            n4(isTri) = n1(isTri);   % fecha o polígono no triângulo com aresta degenerada
+
+            xv = [coord(n1,1), coord(n2,1), coord(n3,1), coord(n4,1)];
+            yv = [coord(n1,2), coord(n2,2), coord(n3,2), coord(n4,2)];
+
+            % vértices "seguintes" (wrap-around: 1->2->3->4->1)
+            xv2 = xv(:, [2 3 4 1]);
+            yv2 = yv(:, [2 3 4 1]);
+
+            % algoritmo de ray casting (par-ímpar), vetorizado nas 4 arestas
+            cond1  = (yv > py) ~= (yv2 > py);
+            denom  = yv2 - yv;
+            denom(denom == 0) = eps;              % evita divisão por zero (aresta horizontal/degenerada)
+            xCross = (xv2 - xv) .* (py - yv) ./ denom + xv;
+            cond2  = px < xCross;
+
+            crossings  = cond1 & cond2;
+            dentro     = mod(sum(crossings, 2), 2) == 1;
+
+            idx = find(dentro, 1);   % mantém o comportamento original: primeiro elemento encontrado
+            if isempty(idx)
+                idx = [];
+            end
         end
 
+
+        function idx = elementos_centroide_na_caixa(elem, coord, ylim, xlim)
+            % Retorna os indices dos elementos cujo centroide esta dentro da caixa
+            % definida por ylim = [ymin ymax] e xlim = [xmin xmax]
+            % elem  : matriz de conectividade (colunas 1:4 = nos, 0 = sem no / triangulo)
+            % coord : coordenadas dos nos
+
+            n1 = elem(:,1);
+            n2 = elem(:,2);
+            n3 = elem(:,3);
+            n4 = elem(:,4);
+
+            isTri = (n4 == 0);
+
+            % indice seguro para indexacao (evita indice 0); contribuicao sera zerada
+            n4safe = n4;
+            n4safe(isTri) = n1(isTri);
+
+            x4 = coord(n4safe,1);
+            y4 = coord(n4safe,2);
+            x4(isTri) = 0;
+            y4(isTri) = 0;
+
+            nNos       = 4 * ones(size(elem,1),1);
+            nNos(isTri) = 3;
+
+            cx = (coord(n1,1) + coord(n2,1) + coord(n3,1) + x4) ./ nNos;
+            cy = (coord(n1,2) + coord(n2,2) + coord(n3,2) + y4) ./ nNos;
+
+            mask = (cy > ylim(1) & cy < ylim(2)) & (cx > xlim(1) & cx < xlim(2));
+            idx  = find(mask);
+        end
     end
 end

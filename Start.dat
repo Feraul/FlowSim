@@ -37,7 +37,7 @@ C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409
 // Se colocar "0", o programa cria "Results" dentro da pasta acima.
 //----------------------------------------------------------------------
                                                         // >>> EDITE AQUI <<<
-teste_semvalor
+teste_MPFAD_tri_distorcido_02
 
 
 //======================================================================
@@ -221,7 +221,7 @@ C:\Users\flc59\Documents\Malhas2
 // Nome do arquivo de malha (extensao .msh).
 //----------------------------------------------------------------------
                                                         // >>> EDITE AQUI <<<
-mesh_clement_quad_distorcido.msh
+mesh_clement_tri_distorcido.msh
 
 
 //======================================================================
