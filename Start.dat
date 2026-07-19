@@ -30,14 +30,14 @@ y
 // Preencha mesmo se a linha acima for [n].
 //----------------------------------------------------------------------
                                                         // >>> EDITE AQUI <<<
-C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409
+C:\Users\flc59\Documents\Benchmark_Cases\Benchmonofasico1
 
 //----------------------------------------------------------------------
 // Nome da subpasta onde os resultados deste caso especifico ficarao.
 // Se colocar "0", o programa cria "Results" dentro da pasta acima.
 //----------------------------------------------------------------------
                                                         // >>> EDITE AQUI <<<
-teste_MPFAD_tri_distorcido_02
+teste
 
 
 //======================================================================
@@ -55,7 +55,7 @@ teste_MPFAD_tri_distorcido_02
 //   [6] Equacao de Richards
 //----------------------------------------------------------------------
                                                         // >>> EDITE AQUI <<<
-6
+1
 
 //----------------------------------------------------------------------
 // Comparar os resultados numericos com dados do MODFLOW?
@@ -113,7 +113,8 @@ lpew2
 // Acelerador da iteracao de Picard:
 //   [FPI] Full Picard | [AA] Anderson | [RRE] Rank Reduced Extrapolation
 //   [MPE] Minimal Polynomial Extrapolation | [Lscheme] L-scheme
-FPI
+//   [LINEAR] linear system
+LINEAR
 
 // Solver da Equacao Hiperbolica (Saturacao):
 //   [stdr] Esquemas Padrao | [mwec] Mass Weighted Explicito
@@ -221,7 +222,7 @@ C:\Users\flc59\Documents\Malhas2
 // Nome do arquivo de malha (extensao .msh).
 //----------------------------------------------------------------------
                                                         // >>> EDITE AQUI <<<
-mesh_clement_tri_distorcido.msh
+Tipo6Malha1.msh
 
 
 //======================================================================
@@ -311,7 +312,7 @@ s
 // unidade escolhida acima.
 //----------------------------------------------------------------------
                                                         // >>> EDITE AQUI <<<
-2
+8
 
 
 //======================================================================
@@ -328,10 +329,8 @@ s
 //      (se o contorno Dirichlet receber uma funcao, use o codigo 123456)
 //----------------------------------------------------------------------
                                                         // >>> EDITE AQUI <<<
-3
-201 0
-101 65
-202 14.8
+1
+101 0
 
 //----------------------------------------------------------------------
 // Condicoes de contorno nos PONTOS (vertices) da geometria.
@@ -341,5 +340,5 @@ s
 //   2) uma linha com os codigos associados a cada grupo de pontos
 //----------------------------------------------------------------------
                                                         // >>> EDITE AQUI <<<
-3
-201 101 202
+1
+101

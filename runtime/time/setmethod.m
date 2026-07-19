@@ -28,8 +28,8 @@ switch env.config.phasekey
     % Resolve o sistema linear estacionario A*p = b uma unica vez
     % e exibe os extremos de pressao no console
     case 1
-        [pressure, flowrate] = env.metodo.resolver(env, env.premethod, ...
-            parms, parms.h_init, parms.dt, 0);
+        [pressure, flowrate] = ferncodes_solver(env, ...
+            parms, parms.dt, source_wells,0);
 
         disp('>> One-phase extrema:');
         max(pressure)

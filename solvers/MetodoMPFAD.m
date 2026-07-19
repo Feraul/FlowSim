@@ -85,7 +85,9 @@ classdef MetodoMPFAD < MetodoBase
         % NAO recalcula V, N, F (geometria pura — invariante no tempo)
         function [env] = atualizarPremethod(obj, env, parms)
             [env]       = ferncodes_Kde_Ded_Kt_Kn(env, parms);
-            [env, ~, ~] = ferncodes_Pre_LPEW_2_vect(env, parms);
+            %[env, ~, ~] = ferncodes_Pre_LPEW_2_vect(env, parms);
+            [env,~,~] = ferncodes_Pre_LPEW_2_vect_antigo(env,parms);
+
         end
 
         %% ── 3. Monta a matriz global do sistema linear ───────────
@@ -143,6 +145,14 @@ classdef MetodoMPFAD < MetodoBase
                         env.premethod.MPFAD] = ...
                         L_scheme(M, I, env.premethod.MPFAD, parms, env, ...
                         tempo, dt, source_wells);
+                case 'LNEAR'
+                    p = M \ I;
+                    % auxiliary variables interpolation
+                    [pinterp,~]=ferncodes_pressureinterpNLFVPP(p,env);
+                    %Get the flow rate (Diamond)
+                    [flowrate,flowresult,flowratedif,faceaux] = ferncodes_flowrate(p,pinterp,...
+                        env);
+
             end
         end
 
