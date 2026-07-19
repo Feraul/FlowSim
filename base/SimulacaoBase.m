@@ -157,7 +157,7 @@ classdef SimulacaoBase < handle
         %
         % ATENCAO: a assinatura atual e (obj, env, extras, theta_n)
         % Se precisar de outros campos, adicione ao struct extras em inicializar()
-        finalizar(obj, env, parms, extras, h, theta_n, theta_init, time)
+        finalizar(obj, env, options)
 
         % escreverResultados — executado apos finalizar() em hydraulic_RE
         %

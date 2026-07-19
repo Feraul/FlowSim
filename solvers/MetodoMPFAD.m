@@ -60,7 +60,8 @@ classdef MetodoMPFAD < MetodoBase
             % Calcula os pesos de interpolacao da pressao nos vertices
             % internos (weight) e os termos de correcao Neumann (s)
             % Metodo: LPEW2 (Linearity Preserving — Edge Weighting 2)
-            [env, ~, ~] = ferncodes_Pre_LPEW_2_vect(env, parms);
+            %[env, ~, ~] = ferncodes_Pre_LPEW_2_vect(env, parms);
+            [env, ~, ~] = ferncodes_Pre_LPEW_2_vect_antigo(env, parms);
 
             % ── pre-processamento de concentracao acoplada ─────────
             % Apenas para simulacoes de transporte (casos 200-300 e 350-400)

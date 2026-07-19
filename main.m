@@ -77,6 +77,6 @@ parms        = env.benchmark.initParms();    % struct vazio com campos padrao
 %   case 6 → Richards (transiente nao-linear)
 %
 % source_wells: pocos injetores/produtores definidos pelo benchmark
-setmethod(sim.definirFontes(env, parms), 'i', 8, env, parms);
+setmethod(sim, sim.definirFontes(env, parms), 'i', 8, env, parms);
 
 toc

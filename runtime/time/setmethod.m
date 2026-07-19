@@ -20,7 +20,7 @@
 %   env          — estrutura global (geometria, config, benchmark, metodo...)
 %   parms        — parametros fisicos do caso
 %--------------------------------------------------------------------------
-function setmethod(source_wells, keywrite, invh, env, parms)
+function setmethod(sim, source_wells, keywrite, invh, env, parms)
 
 switch env.config.phasekey
 
@@ -31,9 +31,7 @@ switch env.config.phasekey
         [pressure, flowrate] = ferncodes_solver(env, ...
             parms, parms.dt, source_wells,0);
 
-        disp('>> One-phase extrema:');
-        max(pressure)
-        min(pressure)
+        sim.finalizar(env, p=pressure, flowrate=flowrate);
 
         % salva VTK com campo de pressao e flowrate
         postprocessor(pressure, flowrate, 0, 0, env, 1, parms);

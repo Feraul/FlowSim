@@ -373,7 +373,16 @@ classdef Caso439 < SimulacaoBase
         % Plota os resultados apos o loop temporal:
         %   fig 2: perfil de water content na coluna x=20
         %   fig 5-6: series temporais de h e theta na coluna x=11
-        function finalizar(obj, env, extras, theta_n,theta_init_num)
+        function finalizar(obj, env, options)
+            arguments
+                obj
+                env
+                options.theta_n = []
+                options.theta_init_num = []
+                options.p = []
+                options.flowrate = []
+            end
+            
             centelem = env.geometry.centelem;
             elem=env.geometry.elem;
             coord=env.geometry.coord;

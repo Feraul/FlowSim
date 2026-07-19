@@ -66,13 +66,13 @@ classdef Caso1 < SimulacaoBase
 
             env.config.perm = kmap;
         end
-        
+
 
         % ── 2. Condicoes de contorno de Dirichlet ─────────────────
-       
+
         function bcattrib = configurarContorno(obj, vertices, flagptr, time, env, pR)
 
-           bcattrib=[];
+            bcattrib=[];
         end
 
         % ── 3. Flags de contorno (nflag e nflagface) ──────────────
@@ -85,7 +85,7 @@ classdef Caso1 < SimulacaoBase
 
             bedge=env.geometry.bedge;
             coord=env.geometry.coord;
-            nflag=50000*ones(size(coord,1),2); 
+            nflag=50000*ones(size(coord,1),2);
             vert  = bedge(:,1);
             x     = coord(vert,1);
             y     = coord(vert,2);
@@ -105,7 +105,7 @@ classdef Caso1 < SimulacaoBase
         %           h_old = -30 na zona nao saturada (z > 65)
         %   dt: passo de tempo = 0.15 dias
         function [parms, env] = preprocessar(obj, env, parms)
-            
+
         end
 
         % ── 5. Fontes e pocos ─────────────────────────────────────
@@ -144,37 +144,13 @@ classdef Caso1 < SimulacaoBase
             % nao faz nada — fallback da base seria identico
         end
 
-        % ── 8. Permeabilidade na fronteira — Brooks-Corey ─────────
-        % Ajusta K11/K22 nas faces de contorno com Dirichlet
-        % usando a permeabilidade relativa avaliada em h_contorno:
-        %   coef = 35 * kr(h)   com kr de Brooks-Corey
-        % O fator 35 é a condutividade hidraulica saturada do solo (cm/dia)
-        function [K11, K12, K21, K22] = ajustarKContorno(obj, env, parms, ...
-                auxkmap, matid, h_contorno, maskT)
-            coef     = zeros(length(maskT),1);
-            mask_neg = h_contorno < 0;
-            mask_pos = h_contorno >= 0;
-            const=env.config.perm(1,1);
-
-            % zona nao saturada: permeabilidade relativa de Brooks-Corey
-            coef(mask_neg) = const .* (2.99e6 ./ (2.99e6 + abs(h_contorno(mask_neg)).^5));
-            % zona saturada: permeabilidade plena
-            coef(mask_pos) = const;
-
-            % aplica apenas nas faces de Dirichlet (maskT = bedge(:,5) < 200)
-            K11 = auxkmap(matid,2).*(~maskT) + coef;
-            K12 = auxkmap(matid,3);
-            K21 = auxkmap(matid,4);
-            K22 = auxkmap(matid,5).*(~maskT) + coef;
-        end
-
         % ── 9. Termo temporal de Richards ─────────────────────────
         % Adiciona a matriz de capacidade hidrica e o vetor de acumulacao
         % ao sistema linear — corresponde ao termo dtheta/dt na eq. de Richards
         % Delega para soil_properties que monta o bloco diagonal esparso
         function [M,I] = adicionarTermoTemporal(obj, M, I, parms, flowresultZ, env)
-           % Caso1 nao adiciona termo temporal — problema sem retencao hidrica
-           % (nao chama soil_properties); M e I retornam inalterados
+            % Caso1 nao adiciona termo temporal — problema sem retencao hidrica
+            % (nao chama soil_properties); M e I retornam inalterados
         end
 
         % ── 10. Interpolacao de Neumann — LPEW2 ───────────────────
@@ -227,100 +203,141 @@ classdef Caso1 < SimulacaoBase
         % Plota os resultados apos o loop temporal:
         %   fig 2: perfil de water content na coluna x=20
         %   fig 5-6: series temporais de h e theta na coluna x=11
-        function finalizar(obj, env, extras, theta_n,theta_init_num)
-            
-        end
+        function finalizar(obj, env, options)
 
+            arguments
+                obj
+                env
+                options.extras = []
+                options.theta_n = []
+                options.theta_init_num = []
+                options.p = []
+                options.flowrate = []
+            end
+
+            p        = options.p;
+
+            disp('>> One-phase extrema:');
+            max(p)
+            min(p)
+  
+            
+            flowrate = options.flowrate;
+  
+            centelem = env.geometry.centelem;   % CORRIGIDO: geomerty->geometry, centlem->centelem
+            bedge    = env.geometry.bedge;
+            inedge   = env.geometry.inedge;
+            coord    = env.geometry.coord;
+            elemarea = env.geometry.elemarea;
+
+            alfa = 0.2;   % ADICIONADO: faltava esta definicao
+
+            % ── solucao analitica nos centroides (vetorizado) ──────────────
+            x_c = centelem(:,1);
+            y_c = centelem(:,2);
+            analytical_sol = 2 - x_c - alfa.*y_c;
+
+            % ── velocidade analitica nas faces (vetorizado) ─────────────────
+            nb     = size(bedge,1);
+            nFace  = nb + size(inedge,1);
+
+            v1 = [bedge(:,1); inedge(:,1)];
+            v2 = [bedge(:,2); inedge(:,2)];
+
+            IJ    = coord(v2,:) - coord(v1,:);        % nFace x 3
+            norma = sqrt(sum(IJ.^2, 2));               % nFace x 1
+
+            Rrot     = [0 -1 0; 1 0 0; 0 0 0];         % matriz constante (renomeada p/ nao colidir)
+            nij_all  = (Rrot * IJ') ./ norma';         % 3 x nFace
+
+            auxpoint = (coord(v2,:) + coord(v1,:)) * 0.5;
+            x_f = auxpoint(:,1);
+            y_f = auxpoint(:,2);
+
+            % epsilon so nas faces internas (inedge), igual ao original
+            epsVec = zeros(nFace,1);
+            epsVec(nb+1:end) = 1e-8;
+
+            phi1 = y_f - alfa*(x_f - 0.5) - 0.475 + epsVec;
+            phi2 = phi1 - 0.05;
+
+            maskLow1 = phi1 < 0;
+            maskHigh = phi1 > 0 & phi2 < 0;
+            maskLow2 = phi2 > 0;
+            maskAny  = maskLow1 | maskHigh | maskLow2;
+            maskLow  = maskLow1 | maskLow2;
+
+            % ── os dois unicos tensores possiveis (calculados uma vez) ─────
+            theta = atand(alfa);
+            R2 = zeros(2);
+            R2(1,1) = cosd(theta); R2(1,2) = sind(theta);
+            R2(2,1) = -R2(1,2);    R2(2,2) = R2(1,1);
+            A2 = inv(R2);
+
+            k_low  = A2 * [1 0; 0 0.1]   * R2;
+            k_high = A2 * [100 0; 0 10]  * R2;
+
+            KK_low  = [k_low(1,1)  k_low(1,2)  0; k_low(2,1)  k_low(2,2)  0; 0 0 0];
+            KK_high = [k_high(1,1) k_high(1,2) 0; k_high(2,1) k_high(2,2) 0; 0 0 0];
+
+            a_low  = -KK_low  * [-1; -alfa; 0];   % vetor 3x1 constante
+            a_high = -KK_high * [-1; -alfa; 0];   % vetor 3x1 constante
+
+            % ── produto escalar a.nij para as duas regioes, de uma vez ─────
+            dot_low  = a_low'  * nij_all;   % 1 x nFace
+            dot_high = a_high' * nij_all;   % 1 x nFace
+
+            F = zeros(nFace,1);
+            F(maskLow)  = dot_low(maskLow)';
+            F(maskHigh) = dot_high(maskHigh)';
+
+            if ~all(maskAny)
+                warning('finalizar:phiGap', ...
+                    '%d face(s) cairam exatamente em phi1==0/phi2==0 e ficaram com F=0.', ...
+                    sum(~maskAny));
+            end
+
+            analytical_vel = F;
+
+            %% O calculo destes erros foram adaptados de Gao an Wu 2010.
+            % ── recupera as velocidades numericas (vetorizado) ────────────────
+            nb    = size(bedge,1);
+            nFace = nb + size(inedge,1);
+
+            v1 = [bedge(:,1); inedge(:,1)];
+            v2 = [bedge(:,2); inedge(:,2)];
+
+            norma  = sqrt(sum((coord(v2,:) - coord(v1,:)).^2, 2));
+            velnum = flowrate(1:nFace) ./ norma;
+
+            % ── calcula o erro respeito a pressao (vetorizado) ────────────────
+            erropressure = sqrt(sum((analytical_sol - p).^2 .* elemarea) / sum(elemarea));
+
+            % ── calcula o erro respeito a velocidade (vetorizado) ─────────────
+            Q = zeros(nFace,1);
+            Q(1:nb)      = elemarea(bedge(:,3));
+            Q(nb+1:end)  = elemarea(inedge(:,3)) + elemarea(inedge(:,4));
+
+            e  = -analytical_vel - velnum;
+            er = e.^2;
+            errovelocity = sqrt(sum(Q.*er) / sum(Q));
+
+            fprintf('\n>> Erros de verificacao (oblique drain):\n');
+            fprintf('   Erro de pressao (L2 ponderado por area): %.6e\n', erropressure);
+            fprintf('   Erro de velocidade (L2 ponderado por Q): %.6e\n', errovelocity);
+        end
         % ── 16. Escrita de resultados em arquivo ──────────────────
         % Salva os campos h, theta, kmap e os centroides em .txt
         % para pos-processamento externo (ex: Python, MATLAB scripts)
-        function escreverResultados(obj, env, h_storage, theta_storage, ...
-                kmap_storage, time_storage)
-            centelem  = env.geometry.centelem;
-            filepath  = env.mainpathfolders.path;
-            tabfolder = env.mainpathfolders.tabfolder;
-            fname = fullfile(filepath, tabfolder);
-
-            writematrix(h_storage,     [fname 'h_steptime3.txt']);
-            writematrix(theta_storage, [fname 'WaterContent_steptime3.txt']);
-            writematrix(centelem,      [fname 'centrocell3.txt']);
-            writematrix(time_storage,  [fname 'time_step3.txt']);
-            writematrix(kmap_storage,  [fname 'condhydraulic_steptime3.txt']);
+        function escreverResultados(obj, env, varargin)
+            % Problemas monofasicos estacionarios nao armazenam resultados em disco
+            % (a analise fica so nos graficos/metricas gerados em finalizar)
 
         end
     end
 
     methods(Static)
 
-        function idx = elemento_no_ponto(elem, coord, px, py)
-            % Retorna o índice do elemento que contém o ponto (px,py)
-            % elem  : matriz de conectividade (colunas 1:4 = nós, coluna 5 = material)
-            %         triângulos têm elem(:,4) == 0
-            % coord : coordenadas dos nós
-            % px,py : coordenadas do ponto de interesse (escalares)
-
-            n1 = elem(:,1);
-            n2 = elem(:,2);
-            n3 = elem(:,3);
-            n4 = elem(:,4);
-
-            isTri = (n4 == 0);
-            n4(isTri) = n1(isTri);   % fecha o polígono no triângulo com aresta degenerada
-
-            xv = [coord(n1,1), coord(n2,1), coord(n3,1), coord(n4,1)];
-            yv = [coord(n1,2), coord(n2,2), coord(n3,2), coord(n4,2)];
-
-            % vértices "seguintes" (wrap-around: 1->2->3->4->1)
-            xv2 = xv(:, [2 3 4 1]);
-            yv2 = yv(:, [2 3 4 1]);
-
-            % algoritmo de ray casting (par-ímpar), vetorizado nas 4 arestas
-            cond1  = (yv > py) ~= (yv2 > py);
-            denom  = yv2 - yv;
-            denom(denom == 0) = eps;              % evita divisão por zero (aresta horizontal/degenerada)
-            xCross = (xv2 - xv) .* (py - yv) ./ denom + xv;
-            cond2  = px < xCross;
-
-            crossings  = cond1 & cond2;
-            dentro     = mod(sum(crossings, 2), 2) == 1;
-
-            idx = find(dentro, 1);   % mantém o comportamento original: primeiro elemento encontrado
-            if isempty(idx)
-                idx = [];
-            end
-        end
-
-
-        function idx = elementos_centroide_na_caixa(elem, coord, ylim, xlim)
-            % Retorna os indices dos elementos cujo centroide esta dentro da caixa
-            % definida por ylim = [ymin ymax] e xlim = [xmin xmax]
-            % elem  : matriz de conectividade (colunas 1:4 = nos, 0 = sem no / triangulo)
-            % coord : coordenadas dos nos
-
-            n1 = elem(:,1);
-            n2 = elem(:,2);
-            n3 = elem(:,3);
-            n4 = elem(:,4);
-
-            isTri = (n4 == 0);
-
-            % indice seguro para indexacao (evita indice 0); contribuicao sera zerada
-            n4safe = n4;
-            n4safe(isTri) = n1(isTri);
-
-            x4 = coord(n4safe,1);
-            y4 = coord(n4safe,2);
-            x4(isTri) = 0;
-            y4(isTri) = 0;
-
-            nNos       = 4 * ones(size(elem,1),1);
-            nNos(isTri) = 3;
-
-            cx = (coord(n1,1) + coord(n2,1) + coord(n3,1) + x4) ./ nNos;
-            cy = (coord(n1,2) + coord(n2,2) + coord(n3,2) + y4) ./ nNos;
-
-            mask = (cy > ylim(1) & cy < ylim(2)) & (cx > xlim(1) & cx < xlim(2));
-            idx  = find(mask);
-        end
+        
     end
 end
