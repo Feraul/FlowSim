@@ -15,6 +15,10 @@ function [M,mvector] = addsource(M,mvector,source_wells,env)
 
 elemarea=env.geometry.elemarea;
 numcase=env.config.numcase;
+ if isempty(source_wells) || (isstruct(source_wells) && ...
+            (~isfield(source_wells,'wells') || isempty(source_wells.wells)))
+        return;
+    end
 wells=source_wells.wells;
 %Case there is a source term in any element
 if (size(wells,2) > 1)

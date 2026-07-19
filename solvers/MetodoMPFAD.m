@@ -107,7 +107,7 @@ classdef MetodoMPFAD < MetodoBase
                 [M, I] = ferncodes_globalmatrix_MPFAD(env, parms);
             else
                 % estacionario ou groundwater — sem termo temporal
-                [M, I, ~] = ferncodes_globalmatrix(env, env.premethod.MPFAD, parms, dt);
+                [M, I, ~] = ferncodes_globalmatrix_MPFAD(env, parms);
             end
         end
 
@@ -145,7 +145,7 @@ classdef MetodoMPFAD < MetodoBase
                         env.premethod.MPFAD] = ...
                         L_scheme(M, I, env.premethod.MPFAD, parms, env, ...
                         tempo, dt, source_wells);
-                case 'LNEAR'
+                case 'LINEAR'
                     p = M \ I;
                     % auxiliary variables interpolation
                     [pinterp,~]=ferncodes_pressureinterpNLFVPP(p,env);

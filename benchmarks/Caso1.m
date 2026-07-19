@@ -82,24 +82,18 @@ classdef Caso1 < SimulacaoBase
         % nflagface(:,1) → tipo de BC na face
         % nflagface(:,2) → valor prescrito de h na face
         function [nflag, nflagface] = configurarFlags(obj, env, pR, time)
-            nelem_nodes = size(env.geometry.coord, 1);
-            nelem_faces = size(env.geometry.bedge, 1);
 
             bedge=env.geometry.bedge;
-            bcflag=env.config.bcflag;
+            coord=env.geometry.coord;
+            nflag=50000*ones(size(coord,1),2); 
+            vert  = bedge(:,1);
+            x     = coord(vert,1);
+            y     = coord(vert,2);
+            delta = 0.2;
 
-            % inicializa com valor sentinela (5000 = interior)
-            nflag     = 5000 * ones(nelem_nodes, 2);
-            nflagface = zeros(nelem_faces, 2);
-
-            [tf, loc] = ismember(bedge(:,4), bcflag(:,1));
-
-            % loc(k) = indice da linha de bcflag que corresponde a bedge(k,4)
-            % (assume que todo bedge(:,4) tem correspondencia em bcflag(:,1))
-
-            vert = bedge(:,1);
-            nflag(vert,1) = bcflag(loc,1);
-            nflag(vert,2) = bcflag(loc,2);
+            nflag(vert,1) = 101;
+            nflag(vert,2) = 2 - x - delta*y;
+            nflagface=[];
         end
 
         % ── 4. Pre-processamento fisico do caso ───────────────────
