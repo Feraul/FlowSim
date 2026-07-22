@@ -1,119 +1,58 @@
-function [p,flowrate,flowresult,flowratedif,faceaux,parms,env]=...
-    ferncodes_iterpicard(M_old,RHS_old,parms,env,time,dt,source_wells)
-% incialicando parametros globais
-nltol=env.config.nltol;
-maxiter=env.config.maxiter;
-pmethod=env.config.pmethod;
-h_kickoff=parms.h_old;
-%% calculo do residuo Inicial
-R0=norm(M_old*h_kickoff-RHS_old);
-p_old=h_kickoff;
-%% inicializando dados para itera��o Picard
-step=0;
-er=1;
-while (nltol<er || nltol==er) && (step<maxiter)
-    % atualiza itera��es
-    step=step+1;
+function [p,flowrate,flowresult,flowratedif,faceaux,parms,env] = ...
+        ferncodes_iterpicard(M_old, RHS_old, parms, env, time, dt, source_wells)
 
-    % --- bloco de estabiliza��o L-scheme ---
-   n = size(M_old,1);
-   M_L   = M_old;%+ 0.1 * speye(n);     % M^{(k)} + L I
-   RHS_L = RHS_old;% + 0.1 * parmRichardEq.h_old;      % RHS^{(k)} + L h^{(k)}
+    nltol   = env.config.nltol;
+    maxiter = env.config.maxiter;
 
-    p_new = solver(M_L,RHS_L);
-    p_new= p_old+0.5*(p_new -p_old);
+    p_old = parms.h_old;
+    R0    = norm(M_old*p_old - RHS_old);
 
-    parms.h_old=p_new;
+    step = 0;
+    er   = 1;
 
-    if strcmp(pmethod,'mpfad') || strcmp(pmethod,'tpfa')
-        %==================================================================
-        % Montagem da matriz global
+    while (er >= nltol) && (step < maxiter)
+        step = step + 1;
 
-        if strcmp(env.config.pmethod,'tpfa')
-            [env,parms] = PLUG_kfunction(env,parms,time);
-            [env] = ferncodes_Kde_Ded_Kt_Kn_TPFA(env,parms);
-          
-            [M,I,]=ferncodes_globalmatrix_TPFA(env,parms);
-        else
-            [env,parms] = PLUG_kfunction(env,parms,time);
-            [env] = ferncodes_Kde_Ded_Kt_Kn(env,parms);
-            % calculo dos pesos que correspondem ao LPEW2
-            [env,~,~] = ferncodes_Pre_LPEW_2_vect(env,parms);
-            
-            [M,I,] = ferncodes_globalmatrix_MPFAD(env,parms);
+        p_new       = solver(M_old, RHS_old);
+        p_new       = p_old + 0.5*(p_new - p_old);
+        parms.h_old = p_new;
+
+        % ── atualiza K(h) SOMENTE se o modelo fisico exigir ──────
+        % (Richards: sim, precisa. NL-TPFA/MPFA com K constante: nao precisa,
+        %  a nao-linearidade esta so no esquema numerico, nao na fisica)
+        if env.benchmark.precisaAtualizarPermeabilidade()
+            [env, parms] = PLUG_kfunction(env, parms, time);
+            [env]        = env.metodo.atualizarPremethod(env, parms);
         end
 
-        %------------------------------------------------------------------
-        %Add a source therm to independent vector "mvector"
-        %Often it may change the global matrix "M" with wells
-        [M_new,I] = addsource(sparse(M),I,source_wells,env);
+        % ── remonta o sistema (sempre necessario -- mesmo com K fixo,
+        %    a matriz pode depender nao-linearmente de p via o esquema) ──
+        [M, I] = env.metodo.montarSistema(env, parms, dt);
 
-        % Often with source term
-        [RHS_new]=sourceterm(I,source_wells);
+        [M_new, I] = addsource(sparse(M), I, source_wells, env);
+        [RHS_new]  = sourceterm(I, source_wells);
 
-        
-    else
-        %% plotagem no visit
-        %S=ones(size(p_new,1),1);
-        %ferncodes_postprocessor(p_new,S,step)
-        [pinterp_new,]=ferncodes_pressureinterpNLFVPP(p_new,nflagno,w,s,Con,...
-            nflagc,wightc,sc);
-        %% Calculo da matriz global
+        R = norm(M_new*p_new - RHS_new);
+        if R0 ~= 0.0
+            er = abs(R/R0);
+        else
+            er = 0.0;
+        end
+        errorelativo(step) = er;
 
-        [M,I]=ferncodes_assemblematrixNLFVPP(pinterp_new,parameter,viscosity,...
-            contnorm,SS,dt,h,MM,gravrate,nflagno);
-        %--------------------------------------------------------------------------
-        %Often it may change the global matrix "M"
-        [M_new,RHS_new] = addsource(sparse(M),I,wells);
-        % Often with source term
-        [RHS_new]=sourceterm(RHS_new,source);
-    end
-    %% Calculo do residuo
-
-    R = norm(M_new*p_new - RHS_new);
-
-    if (R0 ~= 0.0)
-        er = abs(R/R0);
-    else
-        er = 0.0; %exact
-    end
-    errorelativo(step)=er;
-
-    % atualizar
-    M_old=M_new;
-    RHS_old=RHS_new;
-    p_old=p_new;
-end
-
-%--------------------------------------------------------------------------
-
-p=p_new;%M_new\RHS_new;
-
-%Message to user:
-fprintf('\n Iteration number, iterations = %d \n',step)
-fprintf('\n Residual error, error = %d \n',er)
-%Message to user:
-disp('>> The Pressure field was calculated with success!');
-if strcmp(pmethod,'nlfvpp')
-    [pinterp,cinterp]=ferncodes_pressureinterpNLFVPP(p,nflagno,w,s,Con,...
-        nflagc,wightc,sc);
-    %Get the flow rate (Diamond)
-    [flowrate,flowresult,flowratedif]=ferncodes_flowrateNLFVPP(p, pinterp,...
-        parameter,viscosity,Con,nflagc,wightc,sc,dparameter,cinterp,gravrate);
-else
-    if strcmp(env.config.pmethod,'tpfa')
-        [flowrate,flowresult,flowratedif,faceaux] = ferncodes_flowrateTPFA(p,...
-            env);
-    else
-        % auxiliary variables interpolation
-        [pinterp,~]=ferncodes_pressureinterpNLFVPP(p,env);
-        %Get the flow rate (Diamond)
-        [flowrate,flowresult,flowratedif,faceaux] = ferncodes_flowrate(p,pinterp,...
-            env);
+        M_old   = M_new;
+        RHS_old = RHS_new;
+        p_old   = p_new;
     end
 
-end
-%Message to user:
-disp('>> The Flow Rate field was calculated with success!');
+    p = p_new;
 
+    fprintf('\n Iteration number, iterations = %d \n', step);
+    fprintf('\n Residual error, error = %d \n', er);
+    disp('>> The Pressure field was calculated with success!');
+
+    [flowrate, flowresult, flowratedif, faceaux] = ...
+        env.metodo.calcularFlowrate(p, env, parms);
+
+    disp('>> The Flow Rate field was calculated with success!');
 end

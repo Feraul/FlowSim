@@ -27,6 +27,9 @@ tic
 %   env.geometry.*  → coord, elem, bedge, inedge, centelem, elemarea...
 env = preprocessormod(1);
 
+% Arquiva uma copia do Start.dat na pasta do caso correspondente,
+% preservando o historico de configuracoes usadas em cada simulacao
+salvarStartDat();
 %% ── 2. Instancia os tres objetos a partir do Start.dat ──────────
 
 % benchmark: encapsula a fisica especifica do numcase

@@ -1,7 +1,7 @@
 function [mvector]=sourceterm(mvector,source_wells)
 
    if isempty(source_wells) || (isstruct(source_wells) && ...
-            (~isfield(source_wells,'wells') || isempty(source_wells.wells)))
+            (~isfield(source_wells,'source') || isempty(source_wells.source)))
         return;
     end
     source=source_wells.source;

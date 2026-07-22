@@ -60,8 +60,8 @@ classdef MetodoMPFAD < MetodoBase
             % Calcula os pesos de interpolacao da pressao nos vertices
             % internos (weight) e os termos de correcao Neumann (s)
             % Metodo: LPEW2 (Linearity Preserving — Edge Weighting 2)
-            %[env, ~, ~] = ferncodes_Pre_LPEW_2_vect(env, parms);
-            [env, ~, ~] = ferncodes_Pre_LPEW_2_vect_antigo(env, parms);
+            [env, ~, ~] = ferncodes_Pre_LPEW_2_vect(env, parms);
+            %[env, ~, ~] = ferncodes_Pre_LPEW_2_vect_antigo(env, parms);
 
             % ── pre-processamento de concentracao acoplada ─────────
             % Apenas para simulacoes de transporte (casos 200-300 e 350-400)
@@ -86,8 +86,8 @@ classdef MetodoMPFAD < MetodoBase
         % NAO recalcula V, N, F (geometria pura — invariante no tempo)
         function [env] = atualizarPremethod(obj, env, parms)
             [env]       = ferncodes_Kde_Ded_Kt_Kn(env, parms);
-            %[env, ~, ~] = ferncodes_Pre_LPEW_2_vect(env, parms);
-            [env,~,~] = ferncodes_Pre_LPEW_2_vect_antigo(env,parms);
+            [env, ~, ~] = ferncodes_Pre_LPEW_2_vect(env, parms);
+            %[env,~,~] = ferncodes_Pre_LPEW_2_vect_antigo(env,parms);
 
         end
 
@@ -102,14 +102,9 @@ classdef MetodoMPFAD < MetodoBase
         %     → ferncodes_globalmatrix: monta A sem termo temporal
         %       (usa premethod.MPFAD diretamente)
         function [M, I] = montarSistema(obj, env, parms, dt)
-            if env.config.numcase == 331 || ...
-                    (400 < env.config.numcase && env.config.numcase < 500)
-                % Richards / fluxo nao-saturado — inclui termo dtheta/dt
-                [M, I] = ferncodes_globalmatrix_MPFAD(env, parms);
-            else
-                % estacionario ou groundwater — sem termo temporal
-                [M, I, ~] = ferncodes_globalmatrix_MPFAD(env, parms);
-            end
+
+            [M, I] = ferncodes_globalmatrix_MPFAD(env, parms);
+            
         end
 
         %% ── 4. Resolve o sistema linear A*h = b ──────────────────

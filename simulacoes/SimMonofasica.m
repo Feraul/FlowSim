@@ -38,8 +38,8 @@ classdef SimMonofasica < SimulacaoBase
             [parms, env] = env.benchmark.preprocessar(env, parms);
         end
 
-        function wells = definirFontes(obj, env, pR)
-            wells = env.benchmark.definirFontes(env, pR);
+        function source_wells = definirFontes(obj, env, pR)
+            source_wells = env.benchmark.definirFontes(env, pR);
         end
     end
 

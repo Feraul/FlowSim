@@ -41,7 +41,9 @@ classdef Caso439 < SimulacaoBase
             env.config.auxkmap     = obj.isoConst(env);       % K saturado (referencia)
             env.geometry.elem(:,5) = env.utils.idx;           % id de material = idx elemento
         end
-
+        function flag = precisaAtualizarPermeabilidade(obj)
+        flag = true;
+        end
         % ── 2. Condicoes de contorno de Dirichlet ─────────────────
         % Atribui o valor de h nas faces/vertices de contorno
         % de acordo com o flag de cada face:
@@ -258,6 +260,9 @@ classdef Caso439 < SimulacaoBase
             end
         end
 
+
+
+
     end
 
     methods
@@ -266,58 +271,7 @@ classdef Caso439 < SimulacaoBase
         % Localiza os elementos de monitoramento (6 pontos de observacao)
         % salva os indices em .mat para reutilizar em simulacoes futuras
         % e inicializa as series temporais de h e theta
-        function [parms, extras] = inicializar(obj, env, parms, time)
-            centelem = env.geometry.centelem;
-            elem=env.geometry.elem;
-            coord=env.geometry.coord;
-            % pontos de monitoramento — coluna x=11 (pontos 1,2,3)
-            % extras.centro1 = find((105<centelem(:,2) & centelem(:,2)<110) & ...
-            %     (centelem(:,1)>10  & centelem(:,1)<15));
-            % extras.centro2 = find((130<centelem(:,2) & centelem(:,2)<135) & ...
-            %     (centelem(:,1)>10  & centelem(:,1)<15));
-            % extras.centro3 = find((185<centelem(:,2) & centelem(:,2)<190) & ...
-            %     (centelem(:,1)>10  & centelem(:,1)<15));
-            %
-            % % pontos de monitoramento — coluna x=161 (pontos 4,5,6)
-            % extras.centro4 = find((80<centelem(:,2)  & centelem(:,2)<85)  & ...
-            %     (centelem(:,1)>160 & centelem(:,1)<165));
-            % extras.centro5 = find((115<centelem(:,2) & centelem(:,2)<120) & ...
-            %     (centelem(:,1)>160 & centelem(:,1)<165));
-            % extras.centro6 = find((155<centelem(:,2) & centelem(:,2)<160) & ...
-            %     (centelem(:,1)>160 & centelem(:,1)<165));
-
-            % ponto 1
-            extras.centro1 = obj.elemento_no_ponto(elem, coord, 12.5, 107.5);
-
-            % ponto 2
-            extras.centro2 = obj.elemento_no_ponto(elem, coord, 12.5, 132.5);
-
-            % ponto 3
-            extras.centro3 = obj.elemento_no_ponto(elem, coord, 12.5, 187.5);
-
-            % ponto 4
-            extras.centro4 = obj.elemento_no_ponto(elem, coord, 162.5, 82.5);
-
-            % ponto 5
-            extras.centro5 = obj.elemento_no_ponto(elem, coord, 162.5, 117.5);
-
-            % ponto 6
-            extras.centro6 = obj.elemento_no_ponto(elem, coord, 162.5, 157.5);
-
-
-            % persiste indices para proxima simulacao (mesma malha) — cache em data/
-            %cacheDir = fullfile(fileparts(fileparts(mfilename('fullpath'))), 'data');
-            %if ~exist(cacheDir, 'dir'), mkdir(cacheDir); end
-            %save(fullfile(cacheDir, 'indices_elementos_quad.mat'), '-struct', 'extras');
-
-            % series temporais — linha t=0
-            theta_init_num = thetafunction(parms.h_init, parms, env);
-            extras.h_time1 = [time, parms.h_init(extras.centro1), theta_init_num(extras.centro1)];
-            extras.h_time2 = [time, parms.h_init(extras.centro2), theta_init_num(extras.centro2)];
-            extras.h_time3 = [time, parms.h_init(extras.centro3), theta_init_num(extras.centro3)];
-            extras.h_time4 = [time, parms.h_init(extras.centro4), theta_init_num(extras.centro4)];
-            extras.h_time5 = [time, parms.h_init(extras.centro5), theta_init_num(extras.centro5)];
-            extras.h_time6 = [time, parms.h_init(extras.centro6), theta_init_num(extras.centro6)];
+        function [parms] = inicializar(obj, env, parms, time)            
         end
 
         % ── 12. Atualizacao dentro do loop temporal ────────────────
@@ -326,8 +280,8 @@ classdef Caso439 < SimulacaoBase
         %      (h_old = +20 na zona saturada, -30 na nao saturada)
         %   2. Chama o pos-processador para salvar VTK
         %   3. Armazena h e theta nos pontos de monitoramento
-        function [parms, extras] = atualizarEstado(obj, env, parms, extras, ...
-                h, flowrate, time, count)
+        function [parms] = atualizarEstado(obj, env, parms, ...
+                h, theta_n, time, count)
 
             % chute inicial para proxima iteracao de Picard
             p_old        = zeros(size(h));
@@ -344,22 +298,13 @@ classdef Caso439 < SimulacaoBase
             end
 
             % calcula theta e salva VTK
-            theta_n = thetafunction(h, parms, env);
             postprocessor(h, theta_n, 0*flowresultZ, time, env, count, parms);
-
-            % series temporais nos 6 pontos de monitoramento
-            extras.h_time1(count,1:3) = [time, h(extras.centro1), theta_n(extras.centro1)];
-            extras.h_time2(count,1:3) = [time, h(extras.centro2), theta_n(extras.centro2)];
-            extras.h_time3(count,1:3) = [time, h(extras.centro3), theta_n(extras.centro3)];
-            extras.h_time4(count,1:3) = [time, h(extras.centro4), theta_n(extras.centro4)];
-            extras.h_time5(count,1:3) = [time, h(extras.centro5), theta_n(extras.centro5)];
-            extras.h_time6(count,1:3) = [time, h(extras.centro6), theta_n(extras.centro6)];
         end
 
         % ── 13. Criterio de parada ────────────────────────────────
         % Caso 439 usa apenas stopcriteria >= 100 (tempo final atingido)
         % sem criterio especial de parada antecipada
-        function parar = deveParar(obj, parms, premethod, extras, stopcriteria)
+        function parar = deveParar(obj, parms, premethod, stopcriteria)
             parar = false;
         end
 
@@ -383,7 +328,6 @@ classdef Caso439 < SimulacaoBase
                 options.flowrate = []
             end
             
-            centelem = env.geometry.centelem;
             elem=env.geometry.elem;
             coord=env.geometry.coord;
 
@@ -818,6 +762,7 @@ classdef Caso439 < SimulacaoBase
                 300.00	65.00];
 
             plot(Z2(:,1), Z2(:,2))
+
             hold on
             xlabel('Aquifer Lenght')
             ylabel('Z')
@@ -829,17 +774,19 @@ classdef Caso439 < SimulacaoBase
             if max(max(elem(:,4)))~=0
                 figure(3)
 
-                % x=20 e y variando de 0 até 200
-                %idx = (centelem(:,2) < 200) & (centelem(:,1) > 20 & centelem(:,1) < 25);
-                %centro = (1:size(centelem,1))';
-                %centro = centro(idx);
-
                 % Malha quadrilateral ortogonal
-                centro = obj.elementos_centroide_na_caixa(elem, coord, [-Inf 200], [20 25]);
-                
+                %centro = obj.elementos_centroide_na_caixa(elem, coord, [-Inf 200], [20 25]);
+                cacheFile = fullfile(fileparts(fileparts(mfilename('fullpath'))), 'data', 'centro_x=20_quad.mat');
+                if isfile(cacheFile), centro = load(cacheFile).centro;
+                else
+                 centro = obj.elementos_centroide_na_caixa(elem, coord, [-Inf 200], [20 25]); 
+                 save(cacheFile, 'centro'); 
+                end
                 filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_MPFAD_quad_08';
                 fname = fullfile(filepath);
                 theta_n = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_quad_08_1WaterContent_steptime3.txt'));
+                centelem = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_quad_08_1centrocell3.txt'));
+                centroY=centelem(centro,2);
                 % MPFA-D
                 % theta_n --> T=8
                 theta_aux=theta_n(:,end);
@@ -896,38 +843,44 @@ classdef Caso439 < SimulacaoBase
                 hold on
 
                 % theta experimental TEMPO= 8
-                T2=[0.318210	200-100.900
-                    0.297576	200-90.9002
-                    0.279670	200-80.8976
-                    0.268581	200-70.8871
-                    0.269765	200-60.8625
-                    0.243677	200-50.8693
-                    0.238030	200-40.1613
-                    0.239239	200-31.5192
-                    0.245877	200-21.4883
-                    0.249801	200-12.1518];
+               T2=[0.319091	200-100.900
+                    0.301364	200-90.9002
+                    0.283636	200-80.8976
+                    0.271364	200-70.8871
+                    0.271364	200-60.8625
+                    0.253636	200-50.8693
+                    0.249545	200-40.1613
+                    0.250909	200-31.5192
+                    0.250909	200-21.4883
+                    0.253636	200-12.1518];
+
                 plot(T2(:,1), T2(:,2),'o')
                 xlabel('Water Content')
                 ylabel('Z')
+                title('x=21')
                 grid
                 %% ============================================================
                 % x=80
                 figure(4)
-                %idx = (centelem(:,2) < 200) & (centelem(:,1) > 80 & centelem(:,1) < 85);
-                %centro_80 = (1:size(centelem,1))';
-                %centro_80 = centro_80(idx);
-                % malha quad ortongonal
-                centro_80 = obj.elementos_centroide_na_caixa(elem, coord, [-Inf 200], [80 85]);
+                
+                cacheFile = fullfile(fileparts(fileparts(mfilename('fullpath'))), 'data', 'centro_x=80_quad.mat');
+                if isfile(cacheFile), centro_80 = load(cacheFile).centro_80;
+                else
+                 centro_80 = obj.elementos_centroide_na_caixa(elem, coord, [-Inf 200], [80 85]); 
+                 save(cacheFile, 'centro_80'); 
+                end
 
                 filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_MPFAD_quad_08';
                 fname = fullfile(filepath);
                 theta_n = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_quad_08_1WaterContent_steptime3.txt'));
+                centelem = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_quad_08_1centrocell3.txt'));
+                centroY_80=centelem(centro_80,2);
                 % MPFA-D
                 % theta_n --> T=0 e 8
                 theta_aux=theta_n(:,end);
                 theta_init=theta_n(:,2);
                 theta_80=theta_aux(centro_80);
-                centroY_80=centelem(centro_80,2);
+                
                 plot(theta_80, centroY_80)
                 hold on
                 plot(theta_init(centro_80),centroY_80)
@@ -941,7 +894,7 @@ classdef Caso439 < SimulacaoBase
                 % theta_n --> T=0 e 8
                 theta_aux=theta_n(:,end);
                 theta_80=theta_aux(centro_80);
-                centroY_80=centelem(centro_80,2);
+                
                 plot(theta_80, centroY_80)
                 hold on
                 % TPFA
@@ -951,7 +904,6 @@ classdef Caso439 < SimulacaoBase
                 theta_n = readmatrix(fullfile(fname, 'Tables_teste_TPFA_quad_distorcido_08_1WaterContent_steptime3.txt'));
                 theta_aux=theta_n(:,end);
                 theta_80=theta_aux(centro_80);
-                centroY_80=centelem(centro_80,2);
                 plot(theta_80, centroY_80)
                 hold on
 
@@ -987,25 +939,29 @@ classdef Caso439 < SimulacaoBase
                 plot(T4(:,1), T4(:,2),'o')
                 xlabel('Water Content')
                 ylabel('Z')
+                title('x=80')
                 grid
 
                 %% ============================================================
                 figure(5)
-                % malha quadrilateral ortogonal
-                %idx = (centelem(:,2) < 200) & (centelem(:,1) > 140 & centelem(:,1) < 145);
-                %centro_140 = (1:size(centelem,1))';
-                %centro_140 = centro_140(idx);
-
-                centro_140 = obj.elementos_centroide_na_caixa(elem, coord, [-Inf 200], [140 145]);
+                
+                cacheFile = fullfile(fileparts(fileparts(mfilename('fullpath'))), 'data', 'centro_x=140_quad.mat');
+                if isfile(cacheFile), centro_140 = load(cacheFile).centro_140;
+                else
+                 centro_140 = obj.elementos_centroide_na_caixa(elem, coord, [-Inf 200], [140 145]); 
+                 save(cacheFile, 'centro_140'); 
+                end
+                centroY_140=centelem(centro_140,2);
 
                 % MPFAD
                 filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_MPFAD_quad_08';
                 fname = fullfile(filepath);
                 theta_n = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_quad_08_1WaterContent_steptime3.txt'));
+
                 theta_aux=theta_n(:,end);
                 theta_140=theta_aux(centro_140);
                 theta_init=theta_n(:,2);
-                centroY_140=centelem(centro_140,2);
+                
                 plot(theta_140, centroY_140)
                 hold on
                 plot(theta_init(centro_140),centroY_140)
@@ -1057,35 +1013,40 @@ classdef Caso439 < SimulacaoBase
                     0.0432432	200-31.7241
                     0.0135135	200-21.7241];
                 plot(T4(:,1), T4(:,2),'o')
+
+                title('x=140')
                 grid
 
                 %% =============================================================
-                % ponto 1
-                centro1 = obj.elemento_no_ponto(elem, coord, 12.5, 107.5);
+                
                 filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_MPFAD_quad_08';
                 fname = fullfile(filepath);
                 h_n = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_quad_08_1h_steptime3.txt'));
                 time2= readmatrix(fullfile(fname, 'Tables_teste_MPFAD_quad_08_1time_step3.txt'));
                 h_n(:, 1:2:end) = [];
                 
-                h_time1 =h_n(centro1,:); 
-                % ponto 2
-                centro2 = obj.elemento_no_ponto(elem, coord, 12.5, 132.5);
-                
-                h_time2 =h_n(centro2,:); 
-                % ponto 3
-                centro3 = obj.elemento_no_ponto(elem, coord, 12.5, 187.5);
-                h_time3 =h_n(centro3,:); 
-                % ponto 4
-                centro4 = obj.elemento_no_ponto(elem, coord, 162.5, 82.5);
-                h_time4 =h_n(centro4,:); 
-                % ponto 5
-                centro5 = obj.elemento_no_ponto(elem, coord, 162.5, 117.5);
-                h_time5 =h_n(centro5,:); 
-                % ponto 6
-                centro6 = obj.elemento_no_ponto(elem, coord, 162.5, 157.5);
-                h_time6 =h_n(centro6,:); 
-                
+               cacheFile = fullfile(fileparts(fileparts(mfilename('fullpath'))), 'data', 'centros_6pontos_quadrilateral.mat');
+
+                if isfile(cacheFile)
+                    S = load(cacheFile);
+                    centro1 = S.centro1; centro2 = S.centro2; centro3 = S.centro3;
+                    centro4 = S.centro4; centro5 = S.centro5; centro6 = S.centro6;
+                else
+                    centro1 = obj.elemento_no_ponto(elem, coord, 12.5, 107.5);
+                    centro2 = obj.elemento_no_ponto(elem, coord, 12.5, 132.5);
+                    centro3 = obj.elemento_no_ponto(elem, coord, 12.5, 187.5);
+                    centro4 = obj.elemento_no_ponto(elem, coord, 162.5, 82.5);
+                    centro5 = obj.elemento_no_ponto(elem, coord, 162.5, 117.5);
+                    centro6 = obj.elemento_no_ponto(elem, coord, 162.5, 157.5);
+                    save(cacheFile, 'centro1', 'centro2', 'centro3', 'centro4', 'centro5', 'centro6');
+                end
+
+                h_time1 = h_n(centro1,:);  
+                h_time2 = h_n(centro2,:);  
+                h_time3 = h_n(centro3,:);  
+                h_time4 = h_n(centro4,:);  
+                h_time5 = h_n(centro5,:);  
+                h_time6 = h_n(centro6,:);    
                %===========================================================
                % malha quadrilateral distorcido
                % MPFA-D
@@ -1151,31 +1112,38 @@ classdef Caso439 < SimulacaoBase
             else
                 figure(3)
                 % Malha triangular
-                % x=21
-                centro = obj.elementos_centroide_na_caixa(elem, coord, [-Inf 200], [20 25]);
-                centroY=centelem(centro,2);
-                % MPFA-D
+                % x=20
+                cacheFile = fullfile(fileparts(fileparts(mfilename('fullpath'))), 'data', 'centro_x=20_tri.mat');
+                if isfile(cacheFile), centro = load(cacheFile).centro;
+                else
+                 centro = obj.elementos_centroide_na_caixa(elem, coord, [-Inf 200], [20 25]); 
+                 save(cacheFile, 'centro'); 
+                end
+
                 filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_MPFAD_tri_08';
                 fname = fullfile(filepath);
-                theta_n = readmatrix(fullfile(fname, 'WaterContent_steptime3.txt'));
-
-                % theta_n --> T=8
+                theta_n = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_tri_08_1WaterContent_steptime3.txt'));
+                centelem_aux = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_tri_08_1centrocell3.txt'));
+                centroY=centelem_aux(centro,2);
+                
+                % MPFA-D
                 theta_aux=theta_n(:,end);
                 theta_init=theta_n(:,2);
                 theta=theta_aux(centro);
-                
-                plot(theta, centroY)
-                hold on
                 % theta_n --> T=0
                 plot(theta_init(centro),centroY)
                 hold on
+                % theta_n --> T=8
+                plot(theta, centroY)
+                hold on
+                
                 % TPFA
                 filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_TPFA_tri_08';
                 fname = fullfile(filepath);
                 theta_n_T = readmatrix(fullfile(fname, 'Tables_teste_TPFA_tri_08_1WaterContent_steptime3.txt'));
                 % theta_n --> T=8
-                theta_aux=theta_n_T(:,end);
-                theta_T=theta_aux(centro);
+                theta_aux_T=theta_n_T(:,end);
+                theta_T=theta_aux_T(centro);
                 plot(theta_T, centroY)
                 hold on
                 % Malha triangular distorcido
@@ -1198,7 +1166,7 @@ classdef Caso439 < SimulacaoBase
                 theta_TP=theta_aux(centro);
 
                 plot(theta_TP, centroY)
-                legend('MPFA-D: triangle','Initially solution','TPFA: triangle','MPFA-D: distorted triangle','TPFA: distorted triangle')
+                legend('Initially solution','MPFA-D: triangle','TPFA: triangle','MPFA-D: distorted triangle','TPFA: distorted triangle')
 
                 hold on
 
@@ -1221,30 +1189,39 @@ classdef Caso439 < SimulacaoBase
                 hold on
 
                 % theta experimental TEMPO= 8
-                T2=[0.318210	200-100.900
-                    0.297576	200-90.9002
-                    0.279670	200-80.8976
-                    0.268581	200-70.8871
-                    0.269765	200-60.8625
-                    0.243677	200-50.8693
-                    0.238030	200-40.1613
-                    0.239239	200-31.5192
-                    0.245877	200-21.4883
-                    0.249801	200-12.1518];
+                T2=[0.319091	200-100.900
+                    0.301364	200-90.9002
+                    0.283636	200-80.8976
+                    0.271364	200-70.8871
+                    0.271364	200-60.8625
+                    0.253636	200-50.8693
+                    0.249545	200-40.1613
+                    0.250909	200-31.5192
+                    0.250909	200-21.4883
+                    0.253636	200-12.1518];
+
                 plot(T2(:,1), T2(:,2),'o')
                 xlabel('Water Content')
                 ylabel('Z')
+                title('x=21')
                 grid
                 %% ============================================================
                 figure(4)
                 % x=80
-                % malha triangular
-                centro_80 = obj.elementos_centroide_na_caixa(elem, coord, [-Inf 200], [80 85]);
-                centroY_80=centelem(centro_80,2);
+              
+                cacheFile = fullfile(fileparts(fileparts(mfilename('fullpath'))), 'data', 'centro_x=80_tri.mat');
+                if isfile(cacheFile), centro_80 = load(cacheFile).centro_80;
+                else
+                 centro_80 = obj.elementos_centroide_na_caixa(elem, coord, [-Inf 200], [80 85]); 
+                 save(cacheFile, 'centro_80'); 
+                end
+
 
                 filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_MPFAD_tri_08';
                 fname = fullfile(filepath);
                 theta_n = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_tri_08_1WaterContent_steptime3.txt'));
+                centelem = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_tri_08_1centrocell3.txt'));
+                centroY_80=centelem(centro_80,2);
                 % MPFA-D
                 % theta_n --> T=0 e 8
                 theta_aux=theta_n(:,end);
@@ -1257,7 +1234,6 @@ classdef Caso439 < SimulacaoBase
                 
                 hold on
                 % TPFA
-                centro_80 = obj.elementos_centroide_na_caixa(elem, coord, [-Inf 200], [80 85]);
 
                 filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_TPFA_tri_08';
                 fname = fullfile(filepath);
@@ -1326,21 +1302,33 @@ classdef Caso439 < SimulacaoBase
                 legend('MPFA-D: tri', 'TPFA:tri','MPFA-D: distorted tri', 'TPFA: distorted tri')
                 xlabel('Water Content')
                 ylabel('Z')
+                title('x=80')
+                grid
                 %% ============================================================
                 % X=140
                 figure(5)
-                centro_140 = obj.elementos_centroide_na_caixa(elem, coord, [-Inf 200], [140 145]);
-                centroY_140=centelem(centro_140,2);
+
+                cacheFile = fullfile(fileparts(fileparts(mfilename('fullpath'))), 'data', 'centro_x=140_tri.mat');
+                if isfile(cacheFile), centro_140 = load(cacheFile).centro_140;
+                else
+                 centro_140 = obj.elementos_centroide_na_caixa(elem, coord, [-Inf 200], [140 145]); 
+                 save(cacheFile, 'centro_140'); 
+                end
+
                 % malha triangular
                 % MPFAD
                 filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_MPFAD_tri_08';
                 fname = fullfile(filepath);
                 theta_n = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_tri_08_1WaterContent_steptime3.txt'));
+                centelem = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_tri_08_1centrocell3.txt'));
+                centroY_140=centelem(centro_140,2);
+
                 theta_aux=theta_n(:,end);
                 theta_140=theta_aux(centro_140);
+                theta_init=theta_n(:,2);
                 plot(theta_140, centroY_140)
                 hold on
-                plot(theta_init_num(centro_140),centroY_140)
+                plot(theta_init(centro_140),centroY_140)
                 hold on
                 % TPFA
                 filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_TPFA_tri_08';
@@ -1395,7 +1383,9 @@ classdef Caso439 < SimulacaoBase
                     0.0432432	200-31.7241
                     0.0135135	200-21.7241];
                 plot(T4(:,1), T4(:,2),'o')
-
+                xlabel(' Water content')
+                ylabel('Z')
+                title('x=140')
                 legend('MPFA-D: tri', 'TPFA:tri','MPFA-D: distorted tri', 'TPFA: distorted tri')
 
                 grid
@@ -1416,35 +1406,28 @@ classdef Caso439 < SimulacaoBase
                 h_n_T=h_n;
                 h_n_T(:, 1:2:end) = [];
 
-                 % ponto 1
-                centro1 = obj.elemento_no_ponto(elem, coord, 12.5, 107.5);
-                h_time1_M =h_n_M(centro1,:);
-                h_time1_T=h_n_T(centro1,:);
+                cacheFile = fullfile(fileparts(fileparts(mfilename('fullpath'))), 'data', 'centros_6pontos_tri.mat');
 
-                % ponto 2
-                centro2 = obj.elemento_no_ponto(elem, coord, 12.5, 132.5);
-                
-                h_time2_M =h_n_M(centro2,:); 
-                h_time2_T=h_n_T(centro2,:);
-                % ponto 3
-                centro3 = obj.elemento_no_ponto(elem, coord, 12.5, 187.5);
-           
-                h_time3_M =h_n_M(centro3,:);
-                h_time3_T =h_n_T(centro3,:);
-                % ponto 4
-                centro4 = obj.elemento_no_ponto(elem, coord, 162.5, 82.5);
-                h_time4_M =h_n_M(centro4,:); 
-                h_time4_T =h_n_T(centro4,:);
+                if isfile(cacheFile)
+                    S = load(cacheFile);
+                    centro1 = S.centro1; centro2 = S.centro2; centro3 = S.centro3;
+                    centro4 = S.centro4; centro5 = S.centro5; centro6 = S.centro6;
+                else
+                    centro1 = obj.elemento_no_ponto(elem, coord, 12.5, 107.5);
+                    centro2 = obj.elemento_no_ponto(elem, coord, 12.5, 132.5);
+                    centro3 = obj.elemento_no_ponto(elem, coord, 12.5, 187.5);
+                    centro4 = obj.elemento_no_ponto(elem, coord, 162.5, 82.5);
+                    centro5 = obj.elemento_no_ponto(elem, coord, 162.5, 117.5);
+                    centro6 = obj.elemento_no_ponto(elem, coord, 162.5, 157.5);
+                    save(cacheFile, 'centro1', 'centro2', 'centro3', 'centro4', 'centro5', 'centro6');
+                end
 
-                % ponto 5
-                centro5 = obj.elemento_no_ponto(elem, coord, 162.5, 117.5);
-               h_time5_M =h_n_M(centro5,:); 
-                h_time5_T =h_n_T(centro5,:);
-                % ponto 6
-                centro6 = obj.elemento_no_ponto(elem, coord, 162.5, 157.5);
-                h_time6_M =h_n_M(centro6,:);
-                h_time6_T =h_n_T(centro5,:);
-                
+                h_time1_M = h_n_M(centro1,:);  h_time1_T = h_n_T(centro1,:);
+                h_time2_M = h_n_M(centro2,:);  h_time2_T = h_n_T(centro2,:);
+                h_time3_M = h_n_M(centro3,:);  h_time3_T = h_n_T(centro3,:);
+                h_time4_M = h_n_M(centro4,:);  h_time4_T = h_n_T(centro4,:);
+                h_time5_M = h_n_M(centro5,:);  h_time5_T = h_n_T(centro5,:);
+                h_time6_M = h_n_M(centro6,:);  h_time6_T = h_n_T(centro6,:);   
                %===========================================================
                % malha triangular distorcido
                % MPFA-D

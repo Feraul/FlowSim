@@ -67,14 +67,10 @@ classdef MetodoTPFA < MetodoBase
         %   outros (estacionario ou groundwater):
         %     → ferncodes_globalmatrix: monta A sem termo temporal
         function [M, I] = montarSistema(obj, env, parms, dt)
-            if env.config.numcase == 331 || ...
-                    (400 < env.config.numcase && env.config.numcase < 500)
-                % Richards / fluxo nao-saturado — inclui termo dtheta/dt
-                [M, I] = ferncodes_globalmatrix_TPFA(env, parms);
-            else
+            
                 % estacionario ou groundwater — sem termo temporal
-                [M, I, ~] = ferncodes_globalmatrix(env, env.premethod.TPFA, parms, dt);
-            end
+                [M, I] = ferncodes_globalmatrix_TPFA(env, parms);
+
         end
 
         %% ── 4. Resolve o sistema linear A*h = b ──────────────────
@@ -108,6 +104,10 @@ classdef MetodoTPFA < MetodoBase
                         env.premethod.TPFA] = ...
                         L_scheme(M, I, env.premethod.TPFA, parms, env, ...
                         tempo, dt, source_wells);
+                case 'LINEAR'
+                     p = M \ I;
+       
+                    [flowrate, flowresult, flowratedif, faceaux] = env.metodo.calcularFlowrate(p, env, parms);
             end
         end
 

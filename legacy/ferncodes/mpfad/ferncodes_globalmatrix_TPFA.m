@@ -8,14 +8,16 @@ auxelem=env.geometry.elem;
 
 bedge=env.geometry.bedge;
 inedge=env.geometry.inedge;
-auxcentelem=env.geometry.centelem;
-auxbcflag=env.config.bcflag;
-auxnumcase=env.config.numcase;
-auxnormals=env.geometry.normals;
-auxmodflowcompared=env.config.modflowcase;
+centelem=env.geometry.centelem;
+bcflag=env.config.bcflag;
+numcase=env.config.numcase;
+normals=env.geometry.normals;
+modflowcompared=env.config.modflowcase;
 nflag=env.config.nflag;
+nflagface=env.config.nflagface;
 flowrateZ=env.premethod.TPFA.flowrateZ;
 flowresultZ=env.premethod.TPFA.flowresultZ;
+
 
 %-----------------------inicio da rOtina ----------------------------------%
 %Constrói a matriz global.
@@ -36,9 +38,9 @@ visonface = 1;
 % -------------------------------------------------------------------------
 % PRÉ-CÁLCULOS DE FLAGS E VISCOSIDADES
 % -------------------------------------------------------------------------
-isConc   = (200 < auxnumcase && auxnumcase < 300);
-isSat    = (30  < auxnumcase && auxnumcase < 200);
-is2phase = isConc && ismember(auxnumcase,[245 246 247 248 249 251]);
+isConc   = (200 < numcase && numcase < 300);
+isSat    = (30  < numcase && numcase < 200);
+is2phase = isConc && ismember(numcase,[245 246 247 248 249 251]);
 
 % boundary edges
 v1b   = bedge(:,1);
@@ -47,8 +49,8 @@ elemL = bedge(:,3);
 flagb = bedge(:,5);
 
 v0_b  = coord(v2b,:) - coord(v1b,:);
-v1_b  = auxcentelem(elemL,:) - coord(v1b,:);
-v2_b  = auxcentelem(elemL,:) - coord(v2b,:);
+v1_b  = centelem(elemL,:) - coord(v1b,:);
+v2_b  = centelem(elemL,:) - coord(v2b,:);
 nor_b = sqrt(sum((coord(v1b,:) - coord(v2b,:)).^2,2));
 
 visonface_b = ones(bedgesize,1);
@@ -115,26 +117,9 @@ valsI_D  = -visD .* A_D .* (dot_v2v0 .* c1D + dot_v1v0 .* c2D);
 
 % ---------------- Neumann ----------------
 lefN  = elemL(isNeu);
-norN  = nor_b(isNeu);
-flagN = flagb(isNeu);
 
-valsI_N = zeros(nnz(isNeu),1);
-
-if auxnumcase==341 || auxnumcase==341.1
-    % ponto médio da aresta
-    a1 = 0.5*(coord(v1b(isNeu),:) + coord(v2b(isNeu),:));
-    if auxnumcase==341
-        auxk = arrayfun(@(x,y) ferncodes_K(x,y), a1(:,1), a1(:,2));
-    else
-        auxk = arrayfun(@(x) ferncodes_K_1D(x), a1(:,1));
-    end
-    valsI_N = auxnormals(isNeu,2) .* auxk(:) .* nflagface(isNeu,2);
-else
-    % mapeia flagN em bcflag(:,1)
-    [~,loc] = ismember(flagN, auxbcflag(:,1));
-    mask222=bedge(:,5)>200;
-    valsI_N = norN .* auxbcflag(loc,2)+flowrateZ(find(mask222==1),1);
-end
+valsI_N = env.benchmark.calcularNeumannBoundary(isNeu, bedge, ...
+    bcflag, nflagface, flowrateZ, nor_b, normals, env);
 
 % -------------------------------------------------------------------------
 % MONTAGEM VETORIZADA – INTERNAL EDGES
@@ -173,18 +158,12 @@ I = I + accumarray(lefD, valsI_D, size(I));
 I = I + accumarray(lefN, valsI_N, size(I));
 
 %==========================================================================
+%==========================================================================
 % calcula um problema transiente
-% caso simulacao de aguas subterraneas, lei de Darcy
-if (auxnumcase>330 || auxnumcase==330) && (auxnumcase<400)
-    [M,I]=ferncodes_implicitandcranknicolson(M,I,env,dt);
-end
-% caso solo seco e fluido, Eq. Richards
-if 400<auxnumcase && auxnumcase<500
-    [M,I]=soil_properties(M,I,parms,flowresultZ,env);
-end
+[M,I] = env.benchmark.adicionarTermoTemporal(M, I, parms, flowresultZ, env);
 %==========================================================================
 % utilizase somente quando o teste vai ser comparado com resultados do modflow
-if strcmp(auxmodflowcompared,'y')
+if strcmp(modflowcompared,'y')
     idx = elembedge(:,1);
     M(idx,:) = 0;
     M(sub2ind(size(M), idx, idx)) = 1;

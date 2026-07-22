@@ -387,7 +387,7 @@ classdef SimulacaoBase < handle
             norN    = nor_b(isNeu);
             [~,loc] = ismember(flagN, bcflag(:,1));
             mask222 = bedge(:,5) > 200;
-            valsI_N = norN.*bcflag(loc,2) + flowrateZ(find(mask222),1);
+            valsI_N = norN.*bcflag(loc,2)+ flowrateZ(find(mask222==1),1);
         end
 
         % adicionarTermoTemporal — adiciona matriz de massa e vetor de acumulacao

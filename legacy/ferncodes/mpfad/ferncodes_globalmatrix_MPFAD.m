@@ -2,10 +2,10 @@
 
 function [M,I,elembedge] = ferncodes_globalmatrix_MPFAD(env,parms)
 % incializacao de parametros globais
-coord=env.geometry.coord; auxelem=env.geometry.elem;auxesurn2=env.geometry.esurn2;
-auxesurn1=env.geometry.esurn1;bedge=env.geometry.bedge;inedge=env.geometry.inedge;
-auxcentelem=env.geometry.centelem;auxbcflag=env.config.bcflag;
-auxnumcase=env.config.numcase;auxnormals=env.geometry.normals;
+coord=env.geometry.coord; elem=env.geometry.elem;esurn2=env.geometry.esurn2;
+esurn1=env.geometry.esurn1;bedge=env.geometry.bedge;inedge=env.geometry.inedge;
+centelem=env.geometry.centelem;bcflag=env.config.bcflag;
+auxnumcase=env.config.numcase;normals=env.geometry.normals;
 auxmodflowcompared=env.config.modflowcase;nflag=env.config.nflag;
 Ded=env.premethod.MPFAD.Ded;flowrateZ=env.premethod.MPFAD.flowrateZ;
 flowresultZ=env.premethod.MPFAD.flowresultZ;s=env.premethod.MPFAD.s;
@@ -19,13 +19,10 @@ bedgesize = size(bedge,1);
 inedgesize = size(inedge,1);
 
 %Initialize "M" (global matrix) and "I" (known vector)
-M = sparse(size(auxelem,1),size(auxelem,1)); %Prealocação de M.
-I = zeros(size(auxelem,1),1);
-m=0;
-jj=1;
+M = sparse(size(elem,1),size(elem,1)); %Prealocação de M.
+I = zeros(size(elem,1),1);
 elembedge=0;
 % viscosidade ou mobilidade
-visonface = 1;
 %% ========================================================================
 % -------------------------------------------------------------------------
 % PRÉ-CÁLCULOS DE FLAGS E VISCOSIDADES
@@ -41,15 +38,15 @@ elemL = bedge(:,3);
 flagb = bedge(:,5);
 
 v0_b  = coord(v2b,:) - coord(v1b,:);
-v1_b  = auxcentelem(elemL,:) - coord(v1b,:);
-v2_b  = auxcentelem(elemL,:) - coord(v2b,:);
+v1_b  = centelem(elemL,:) - coord(v1b,:);
+v2_b  = centelem(elemL,:) - coord(v2b,:);
 nor_b = sqrt(sum((coord(v1b,:) - coord(v2b,:)).^2,2));
 
 visonface_b = ones(bedgesize,1);
 if isConc && is2phase
-    visonface_b = auxviscosity(1:bedgesize,:);          % matriz (2 fases)
+    visonface_b = viscosity(1:bedgesize,:);          % matriz (2 fases)
 elseif isSat
-    visonface_b = sum(auxviscosity(1:bedgesize,:),2);   % escalar por aresta
+    visonface_b = sum(viscosity(1:bedgesize,:),2);   % escalar por aresta
 end
 
 % internal edges
@@ -60,9 +57,9 @@ eR = inedge(:,4);
 
 visonface_i = ones(inedgesize,1);
 if isConc && is2phase
-    visonface_i = auxviscosity(bedgesize + (1:inedgesize),:);
+    visonface_i = viscosity(bedgesize + (1:inedgesize),:);
 elseif isSat
-    visonface_i = sum(auxviscosity(bedgesize + (1:inedgesize),:),2);
+    visonface_i = sum(viscosity(bedgesize + (1:inedgesize),:),2);
 end
 
 % -------------------------------------------------------------------------
@@ -108,10 +105,12 @@ dot_v1v0 = sum(v1D .*  v0D ,2);
 valsI_D  = -visD .* A_D .* (dot_v2v0 .* c1D + dot_v1v0 .* c2D) + ...
     visD .* (c2D - c1D) .* Kt(isDir);
 
-% ---------------- Neumann ----------------
+% ---------------- Neumann Boundary ----------------
 lefN  = elemL(isNeu);
+
 valsI_N = env.benchmark.calcularNeumannBoundary(isNeu, bedge, ...
-    auxbcflag, nflagface, flowrateZ, nor_b, auxnormals, env);
+    bcflag, nflagface, flowrateZ, nor_b, normals, env);
+
 % -------------------------------------------------------------------------
 % MONTAGEM VETORIZADA – INTERNAL EDGES
 % -------------------------------------------------------------------------
@@ -197,7 +196,7 @@ cols_add = [];
 vals_add = [];
 
 % ── fora do loop — calcula tamanho total UMA vez ─────────────────
-nec_per  = auxesurn2(2:end) - auxesurn2(1:end-1);
+nec_per  = esurn2(2:end) - esurn2(1:end-1);
 total    = 2*(sum(nec_per(e1(maskInt1))) + sum(nec_per(e2(maskInt2))));
 
 % ── aloca UMA vez — sem realocação dentro do loop ─────────────────
@@ -208,9 +207,9 @@ ptr = 1;
 
 for k = edges1.'
     n        = e1(k);
-    idx      = auxesurn2(n)+1 : auxesurn2(n+1);
+    idx      = esurn2(n)+1 : esurn2(n+1);
     nc       = numel(idx);
-    cols_loc = auxesurn1(idx);
+    cols_loc = esurn1(idx);
     coef     = visI(k)*Kde(k)*Ded(k);   % escalar — calcula uma vez
 
     % L — sem repmat, sem cópia extra
@@ -230,7 +229,7 @@ end
 
 % vértice 2
 % ── pre-aloca para edges2 ─────────────────────────────────────────
-nec_per  = auxesurn2(2:end) - auxesurn2(1:end-1);
+nec_per  = esurn2(2:end) - esurn2(1:end-1);
 total2   = 2 * sum(nec_per(e2(maskInt2)));
 
 rows_add2 = zeros(total2,1);
@@ -240,9 +239,9 @@ ptr2 = 1;
 
 for k = edges2.'
     n        = e2(k);
-    idx      = auxesurn2(n)+1 : auxesurn2(n+1);
+    idx      = esurn2(n)+1 : esurn2(n+1);
     nc       = numel(idx);
-    cols_loc = auxesurn1(idx);
+    cols_loc = esurn1(idx);
     coef     = visI(k)*Kde(k)*Ded(k);   % escalar — calcula uma vez
 
     % L — sinal negativo para edges2

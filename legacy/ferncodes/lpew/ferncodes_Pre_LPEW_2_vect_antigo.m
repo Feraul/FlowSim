@@ -18,6 +18,7 @@ ns2 = env.geometry.nsurn2;
 es1 = env.geometry.esurn1;
 es2 = env.geometry.esurn2;
 N=env.premethod.MPFAD.N;
+flowrateZ=env.premethod.MPFAD.flowrateZ;
 
 nNodes = size(coord,1);
 
@@ -288,13 +289,25 @@ for y = 1:nNodes
         if face1 <= size(env.geometry.bedge,1) && face2 <= size(env.geometry.bedge,1) && 200 < env.geometry.bedge(MMM,4)
             a = env.config.bcflag(:,1) == env.geometry.bedge(face1,5);
             s1 = find(a == 1);
+            %mask222 = env.geometry.bedge(face1,5)>200;
+            %if mask222
+            %    fluxZ1 = flowrateZ(face1,1) / normfaceaux1;
+            %else
+            %    fluxZ1 = 0;
+            %end
 
-            flux1=env.config.bcflag(s1,2);
+            flux1=env.config.bcflag(s1,2);%+fluxZ1;
             b = env.config.bcflag(:,1) == env.geometry.bedge(face2,5);
             s2 = find(b == 1);
-            flux2=env.config.bcflag(s2,2);
+            %mask222 = env.geometry.bedge(face2,5)>200;
+            % if mask222
+            %    fluxZ2 = flowrateZ(face2,1) / normfaceaux1;
+            %else
+            %    fluxZ2 = 0;
+            %end
+            flux2=env.config.bcflag(s2,2);%+fluxZ2;
 
-            s(No,1) = -(1/sum(lambda))*(r(No,1)*flux1 + r(No,2)*flux2);
+            s(No,1) = -(1/sum(lambda))*(r(No,1)*flux1  + r(No,2)*flux2);
         end
     end
 end

@@ -106,9 +106,6 @@ nv     = sqrt(normv2);                              % substitui vecnorm
 H2 = abs(vx.*vd2(:,2) - vy.*vd2(:,1)) ./ nv;      % substitui cross+vecnorm
 H1 = abs(vx.*ve2(:,2) - vy.*ve2(:,1)) ./ nv;
 
-no1 = coord(inedge(:,1),2);
-no2 = coord(inedge(:,2),2);
-
 %% ── Permeabilidade internal ──────────────────────────────────────
 matL = elem(inedge(:,3),5);
 matR = elem(inedge(:,4),5);

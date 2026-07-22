@@ -38,6 +38,8 @@ switch numcase
     % caso monofasico
     case 1, bench=Caso1();
 
+    case 2, bench=Caso2();
+
     %% ── Carga hidraulica — Groundwater (300–350) ─────────────────
 
     % Caso 331 — aquifero transiente com termo de armazenamento

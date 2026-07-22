@@ -51,7 +51,7 @@ flag_atualizaFlags = benchmark.precisaAtualizarFlags(0);
 
 % ── inicializacao especifica do benchmark ─────────────────────────
 % ex: caso 439 calcula pontos de monitoramento e series temporais t=0
-[parms, extras] = benchmark.inicializar(env, parms, time);
+[parms] = benchmark.inicializar(env, parms, time);
 
 tic
 %% ── Loop temporal principal ──────────────────────────────────────
@@ -89,8 +89,8 @@ while stopcriteria < 100
     %% ── 4. Logica especifica do benchmark ────────────────────────
     % ex: caso 439 → atualiza h_old, chama postprocessor, armazena h_time
     % ex: caso 436 → calcula erro L2, atualiza fonte, atualiza h_init exato
-    [parms, extras] = benchmark.atualizarEstado(env, parms, extras, ...
-        h, flowrate, time, count);
+    [parms] = benchmark.atualizarEstado(env, parms, ...
+        h, theta_n, time, count);
 
     %% ── 5. Atualiza kmap e premethod para o proximo passo ────────
     % Richards nao-linear: K(h) muda a cada passo de tempo
@@ -109,7 +109,7 @@ while stopcriteria < 100
     %% ── 7. Criterio de parada especial do benchmark ──────────────
     % caso 431: para quando a frente de umidade atinge a altura alvo
     % caso 439: sempre false (para apenas pelo stopcriteria >= 100)
-    if benchmark.deveParar(parms, env.premethod, extras, stopcriteria)
+    if benchmark.deveParar(parms, env.premethod, stopcriteria)
         break
     end
 
@@ -121,13 +121,6 @@ while stopcriteria < 100
 
 end % while
 toc
-
-%% ── Finalizacao — graficos e erros ──────────────────────────────
-% delega ao benchmark: plots de h(t), theta(z), frentes de umidade, erros L2
-% ex: caso 439 → figures 2,5,6,7,8
-% ex: caso 437 → plots de massa total, erro relativo, MBE
-env.benchmark.finalizar(env, extras, theta_n,theta_init);
-
 %% ── Escrita de resultados em arquivo ─────────────────────────────
 % trunca o storage ao tamanho real (count passos realizados)
 h_storage     = h_storage(:,     1:2*count);
@@ -139,6 +132,13 @@ time_storage  = time_storage(    1:count);
 % ex: caso 439 → h_steptime3.txt, WaterContent_steptime3.txt, ...
 env.benchmark.escreverResultados(env, h_storage, theta_storage, ...
     kmap_storage, time_storage);
+%% ── Finalizacao — graficos e erros ──────────────────────────────
+% delega ao benchmark: plots de h(t), theta(z), frentes de umidade, erros L2
+% ex: caso 439 → figures 2,5,6,7,8
+% ex: caso 437 → plots de massa total, erro relativo, MBE
+env.benchmark.finalizar(env, theta_n=theta_n, theta_init_num=theta_init);
+
+
 
 disp('------------------------------------------------');
 disp('>> Global Hydraulic head extrema values [hmax hmin]:');

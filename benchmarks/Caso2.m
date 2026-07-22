@@ -1,52 +1,33 @@
-classdef Caso1 < SimulacaoBase
+classdef Caso2 < SimulacaoBase
     
 
     properties
-        Nome   = 'Linearity preserving verification: oblique drain '   % nome legível para log
-        TipoID = 1                      % corresponde ao numcase do Start.dat
+        Nome   = 'Convergence test: heterogeneous rotating anisotropy '   % Yuan and Sheng
+        TipoID = 2                      % corresponde ao numcase do Start.dat
     end
 
     methods
 
         % ── 1. Permeabilidade
         function [env, parms] = configurarPermeabilidade(obj, env, parms, time)
-            bedge=env.geometry.bedge;
             centelem=env.geometry.centelem;
-
-            % troca de colunas 1 e 2 de bedge
-            bedge(:,[1 2]) = bedge(:,[2 1]);
-
+            elem=env.geometry.elem;
             x = centelem(:,1);
             y = centelem(:,2);
-            n = size(centelem,1);
-            alfa  = 0.2;
-            theta = atand(alfa);
-            phi1 = y - alfa*(x - 0.5) - 0.475;
-            phi2 = phi1 - 0.05;
+            n = size(elem,1);
 
-            % mascaras dos 3 ramos originais (condicoes estritas, com "gap" em phi1==0 / phi2==0)
-            maskLow1  = phi1 < 0;
-            maskHigh  = phi1 > 0 & phi2 < 0;
-            maskLow2  = phi2 > 0;
-            maskAny   = maskLow1 | maskHigh | maskLow2;
-            maskLow   = maskLow1 | maskLow2;
+            a = 1 + 2*x.^2 + y.^2;
+            b = 1 + x.^2 + 2*y.^2;
 
-            % matriz de rotacao (constante)
-            R = zeros(2);
-            R(1,1) = cosd(theta);
-            R(1,2) = sind(theta);
-            R(2,1) = -R(1,2);
-            R(2,2) = R(1,1);
-            A = inv(R);
+            theta = 5*pi/12;
+            c = cos(theta);
+            s = sin(theta);
 
-            k_low  = A * [1 0; 0 0.1]  * R;
-            k_high = A * [100 0; 0 10] * R;
-            k_low_flat  = [k_low(1,1)  k_low(1,2)  k_low(2,1)  k_low(2,2)];
-            k_high_flat = [k_high(1,1) k_high(1,2) k_high(2,1) k_high(2,2)];
+            k11 = c^2*a + s^2*b;
+            k12 = c*s*(a - b);       % = k21 (tensor simetrico)
+            k22 = s^2*a + c^2*b;
 
-            kmap = zeros(n,5);   % pre-alocacao explicita (recomendado)
-            kmap(maskAny,1)    = find(maskAny);
-            kmap(maskAny, 2:5) = maskLow(maskAny) .* k_low_flat + maskHigh(maskAny) .* k_high_flat;
+            kmap = [(1:n)', k11, k12, k12, k22];
 
             env.config.perm = kmap;
         end
@@ -78,11 +59,10 @@ classdef Caso1 < SimulacaoBase
             vert  = bedge(:,1);
             x     = coord(vert,1);
             y     = coord(vert,2);
-            delta = 0.2;
 
-            nflag(vert,1) = 101;
-            nflag(vert,2) = 2 - x - delta*y;
-            nflagface=[];
+            nflag(vert,1)=101;
+            nflag(vert,2)=sin(pi*x).*sin(pi*y);
+             nflagface=[];
         end
 
         % ── 4. Pre-processamento fisico do caso ───────────────────
@@ -100,8 +80,20 @@ classdef Caso1 < SimulacaoBase
         % ── 5. Fontes e pocos ─────────────────────────────────────
         % Delega a definicao de pocos injetores/produtores para
         % a funcao padrao defineWells
-        function wells = definirFontes(obj, env, pR)
-            wells = [];
+        function source_wells = definirFontes(obj, env, pR)
+            centelem=env.geometry.centelem;
+            elemarea=env.geometry.elemarea;
+            x = centelem(:,1);
+            y = centelem(:,2);
+
+            t1 = 2.46711*(x.^2-y.^2).*cos(pi*x).*cos(pi*y) - pi^2*(1+1.0669*x.^2+1.93289*y.^2).*sin(pi*x).*sin(pi*y) + ...
+                1.57061*x.*sin(pi*x).*cos(pi*y) + 6.70353*x.*cos(pi*x).*sin(pi*y);
+
+            t2 = 2.46711*(x.^2-y.^2).*cos(pi*x).*cos(pi*y) - pi^2*(1+1.93289*x.^2+1.0669*y.^2).*sin(pi*x).*sin(pi*y) + ...
+                6.70353*y.*sin(pi*x).*cos(pi*y) - 1.57061*y.*cos(pi*x).*sin(pi*y);
+
+            source_wells.source = -(t1+t2) .* elemarea;
+            source_wells.wells=[];
         end
 
         % ── 6a. Modelo de retencao hidrica — Brooks-Corey ─────────
@@ -209,8 +201,6 @@ classdef Caso1 < SimulacaoBase
             disp('>> One-phase extrema:');
             max(p)
             min(p)
-  
-            
             flowrate = options.flowrate;
   
             centelem = env.geometry.centelem;   % CORRIGIDO: geomerty->geometry, centlem->centelem
@@ -218,73 +208,36 @@ classdef Caso1 < SimulacaoBase
             inedge   = env.geometry.inedge;
             coord    = env.geometry.coord;
             elemarea = env.geometry.elemarea;
-
-            alfa = 0.2;   % ADICIONADO: faltava esta definicao
-
-            % ── solucao analitica nos centroides (vetorizado) ──────────────
-            x_c = centelem(:,1);
-            y_c = centelem(:,2);
-            analytical_sol = 2 - x_c - alfa.*y_c;
+            centelem= env.geometry.centelem;
+            x=centelem(:,1);
+            y=centelem(:,2);
+            
+            analytical_sol= sin(pi*x) .* sin(pi*y);
+            
 
             % ── velocidade analitica nas faces (vetorizado) ─────────────────
-            nb     = size(bedge,1);
-            nFace  = nb + size(inedge,1);
+            nb    = size(bedge,1);
+            nFace = nb + size(inedge,1);
 
             v1 = [bedge(:,1); inedge(:,1)];
             v2 = [bedge(:,2); inedge(:,2)];
 
-            IJ    = coord(v2,:) - coord(v1,:);        % nFace x 3
-            norma = sqrt(sum(IJ.^2, 2));               % nFace x 1
+            IJ    = coord(v2,:) - coord(v1,:);
+            norma = sqrt(sum(IJ.^2, 2));
 
-            Rrot     = [0 -1 0; 1 0 0; 0 0 0];         % matriz constante (renomeada p/ nao colidir)
-            nij_all  = (Rrot * IJ') ./ norma';         % 3 x nFace
+            Rrot    = [0 -1 0; 1 0 0; 0 0 0];
+            nij_all = (Rrot * IJ') ./ norma';        % 3 x nFace
 
             auxpoint = (coord(v2,:) + coord(v1,:)) * 0.5;
-            x_f = auxpoint(:,1);
-            y_f = auxpoint(:,2);
+            x = auxpoint(:,1);
+            y = auxpoint(:,2);
 
-            % epsilon so nas faces internas (inedge), igual ao original
-            epsVec = zeros(nFace,1);
-            epsVec(nb+1:end) = 1e-8;
+            t0  = pi*(1+1.0670*x.^2+1.9330*y.^2).*cos(pi*x).*sin(pi*y) + pi*(x.^2-y.^2)*0.25.*sin(pi*x).*cos(pi*y);
+            t01 = pi*(1+1.9330*x.^2+1.0670*y.^2).*sin(pi*x).*cos(pi*y) + pi*(x.^2-y.^2)*0.25.*cos(pi*x).*sin(pi*y);
 
-            phi1 = y_f - alfa*(x_f - 0.5) - 0.475 + epsVec;
-            phi2 = phi1 - 0.05;
+            a_all = [-t0, -t01, zeros(nFace,1)];     % nFace x 3
 
-            maskLow1 = phi1 < 0;
-            maskHigh = phi1 > 0 & phi2 < 0;
-            maskLow2 = phi2 > 0;
-            maskAny  = maskLow1 | maskHigh | maskLow2;
-            maskLow  = maskLow1 | maskLow2;
-
-            % ── os dois unicos tensores possiveis (calculados uma vez) ─────
-            theta = atand(alfa);
-            R2 = zeros(2);
-            R2(1,1) = cosd(theta); R2(1,2) = sind(theta);
-            R2(2,1) = -R2(1,2);    R2(2,2) = R2(1,1);
-            A2 = inv(R2);
-
-            k_low  = A2 * [1 0; 0 0.1]   * R2;
-            k_high = A2 * [100 0; 0 10]  * R2;
-
-            KK_low  = [k_low(1,1)  k_low(1,2)  0; k_low(2,1)  k_low(2,2)  0; 0 0 0];
-            KK_high = [k_high(1,1) k_high(1,2) 0; k_high(2,1) k_high(2,2) 0; 0 0 0];
-
-            a_low  = -KK_low  * [-1; -alfa; 0];   % vetor 3x1 constante
-            a_high = -KK_high * [-1; -alfa; 0];   % vetor 3x1 constante
-
-            % ── produto escalar a.nij para as duas regioes, de uma vez ─────
-            dot_low  = a_low'  * nij_all;   % 1 x nFace
-            dot_high = a_high' * nij_all;   % 1 x nFace
-
-            F = zeros(nFace,1);
-            F(maskLow)  = dot_low(maskLow)';
-            F(maskHigh) = dot_high(maskHigh)';
-
-            if ~all(maskAny)
-                warning('finalizar:phiGap', ...
-                    '%d face(s) cairam exatamente em phi1==0/phi2==0 e ficaram com F=0.', ...
-                    sum(~maskAny));
-            end
+            F = sum(a_all .* nij_all', 2);           % dot(a,nij) linha a linha
 
             analytical_vel = F;
 
@@ -311,7 +264,7 @@ classdef Caso1 < SimulacaoBase
             er = e.^2;
             errovelocity = sqrt(sum(Q.*er) / sum(Q));
 
-            fprintf('\n>> Erros de verificacao (oblique drain):\n');
+            fprintf('\n>> Erros de verificacao :\n');
             fprintf('   Erro de pressao (L2 ponderado por area): %.6e\n', erropressure);
             fprintf('   Erro de velocidade (L2 ponderado por Q): %.6e\n', errovelocity);
         end
