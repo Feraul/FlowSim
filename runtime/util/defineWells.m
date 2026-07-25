@@ -1,6 +1,6 @@
 % definimos os pocos para cada do problema
 
-function source_wells= defineWells(env,parmRichardEq)
+function source_wells= defineWells(env,parms,time)
 
 wells =0;
 numcase=env.config.numcase;
@@ -13,7 +13,7 @@ else
     P=0;
 end
 % (2)Catch "source" came from "PLUG_sourcefunction"
-source = PLUG_sourcefunction(P,env,0,parmRichardEq);
+source = PLUG_sourcefunction(P,env,time,parms);
 
 source_wells.wells=wells;
 source_wells.source=source;

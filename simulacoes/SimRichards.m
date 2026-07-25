@@ -76,8 +76,8 @@ classdef SimRichards < SimulacaoBase
         % Delega para defineWells(env, parms), que le as posicoes e
         % vazoes dos pocos do Start.dat e monta a estrutura source_wells.
         % O resultado e passado para setmethod → hydraulic_RE → ferncodes_solver.
-        function wells = definirFontes(obj, env, parms)
-            wells = defineWells(env, parms);
+        function wells = definirFontes(obj, env, parms,time)
+            wells = defineWells(env, parms,time);
         end
 
         %% ── Metodos vazios — benchmark concreto sobrescreve ──────

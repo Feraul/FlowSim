@@ -51,7 +51,7 @@ flag_atualizaFlags = benchmark.precisaAtualizarFlags(0);
 
 % ── inicializacao especifica do benchmark ─────────────────────────
 % ex: caso 439 calcula pontos de monitoramento e series temporais t=0
-[parms] = benchmark.inicializar(env, parms, time);
+[parms,extras] = benchmark.inicializar(env, parms, time);
 
 tic
 %% ── Loop temporal principal ──────────────────────────────────────
@@ -89,8 +89,8 @@ while stopcriteria < 100
     %% ── 4. Logica especifica do benchmark ────────────────────────
     % ex: caso 439 → atualiza h_old, chama postprocessor, armazena h_time
     % ex: caso 436 → calcula erro L2, atualiza fonte, atualiza h_init exato
-    [parms] = benchmark.atualizarEstado(env, parms, ...
-        h, theta_n, time, count);
+    [parms,extras] = benchmark.atualizarEstado(env, parms, ...
+        h, theta_n, time, count,flowrate,extras);
 
     %% ── 5. Atualiza kmap e premethod para o proximo passo ────────
     % Richards nao-linear: K(h) muda a cada passo de tempo
@@ -98,6 +98,8 @@ while stopcriteria < 100
     % atualizarPremethod → recalcula Kde, Ded, Kn, Kt, pesos LPEW2 com novo kmap
     [env,parms] = PLUG_kfunction(env, parms, time);
     [env] = metodo.atualizarPremethod(env, parms);
+    %%   
+    source_wells = benchmark.definirFontes(env, parms, time);
 
     %% ── 6. Atualiza flags se necessario ──────────────────────────
     % Apenas caso 436 (BC dependente do tempo) retorna flag=true
@@ -131,12 +133,13 @@ time_storage  = time_storage(    1:count);
 % delega ao benchmark: cada caso escreve os arquivos que precisa
 % ex: caso 439 → h_steptime3.txt, WaterContent_steptime3.txt, ...
 env.benchmark.escreverResultados(env, h_storage, theta_storage, ...
-    kmap_storage, time_storage);
+    kmap_storage, time_storage,centelem,extras);
+
 %% ── Finalizacao — graficos e erros ──────────────────────────────
 % delega ao benchmark: plots de h(t), theta(z), frentes de umidade, erros L2
 % ex: caso 439 → figures 2,5,6,7,8
 % ex: caso 437 → plots de massa total, erro relativo, MBE
-env.benchmark.finalizar(env, theta_n=theta_n, theta_init_num=theta_init);
+env.benchmark.finalizar(env, theta_n=theta_n, theta_init_num=theta_init,extras=extras);
 
 
 

@@ -1,117 +1,96 @@
+function postprocessor(env, step, time, options)
+arguments
+    env
+    step
+    time
+    options.pressure         = []
+    options.watersaturation  = []
+    options.theta_n          = []
+    options.exact_sol        = []
+    options.normk            = []
+    options.satLabel         = ''   % permite sobrescrever o nome do campo (ex: 'Theta')
+end
 
-
-
-function postprocessor(pressure, watersaturation,normk ,...
-    time, env, step, parmRichardEq)
-
-coord   = env.geometry.coord;
-elem    = env.geometry.elem;
-filepath = env.mainpathfolders.path;
+coord     = env.geometry.coord;
+elem      = env.geometry.elem;
+filepath  = env.mainpathfolders.path;
 resfolder = env.mainpathfolders.resfolder;
-
 auxnumcase = env.config.numcase;
-% if auxnumcase > 400
-%     normk = parmRichardEq.normperm;
-% else
-%     normk = env.geometry.normperm;
-% end
-
-% Arquivo VTU
-fname_vtu = fullfile(filepath, resfolder, ['res_00' num2str(step) '.vtu']);
-fid = fopen(fname_vtu,'w');
-
-% -------------------------------------------------
-% Cabeçalho XML
-% -------------------------------------------------
-fprintf(fid, '<?xml version="1.0"?>\n');
-fprintf(fid, '<VTKFile type="UnstructuredGrid" version="0.1" byte_order="LittleEndian">\n');
-fprintf(fid, '  <UnstructuredGrid>\n');
-fprintf(fid, '    <Piece NumberOfPoints="%d" NumberOfCells="%d">\n', size(coord,1), size(elem,1));
-
-% -------------------------------------------------
-% PONTOS
-% -------------------------------------------------
-fprintf(fid, '      <Points>\n');
-fprintf(fid, '        <DataArray type="Float32" NumberOfComponents="3" format="ascii">\n');
-fprintf(fid, '          %.16E %.16E %.16E\n', coord');
-fprintf(fid, '        </DataArray>\n');
-fprintf(fid, '      </Points>\n');
-
-% -------------------------------------------------
-% CELLS
-% -------------------------------------------------
-% Conta triângulos e quadriláteros
-triMask  = elem(:,4)==0;
+if size(coord,2) == 2
+    coord = [coord, zeros(size(coord,1),1)];
+end
+nelem   = size(elem,1);
+npoints = size(coord,1);
+triMask  = elem(:,4) == 0;
 quadMask = ~triMask;
-nelem = size(elem,1);
+fname_vtk = fullfile(filepath, resfolder, ['res_00' num2str(step) '.vtk']);
+fid = fopen(fname_vtk,'w');
 
-% CELLS connectivity
-fprintf(fid, '      <Cells>\n');
+fprintf(fid, '# vtk DataFile Version 3.0\n');
+fprintf(fid, 'time=%g step=%d\n', time, step);
+fprintf(fid, 'ASCII\n');
+fprintf(fid, 'DATASET UNSTRUCTURED_GRID\n');
 
-% Connectivity
-fprintf(fid, '        <DataArray type="Int32" Name="connectivity" format="ascii">\n');
-% Triângulos
+fprintf(fid, 'POINTS %d float\n', npoints);
+fprintf(fid, '%.6E %.6E %.6E\n', coord');
+
+cellsize = sum(3*triMask + 4*quadMask) + nelem;
+fprintf(fid, 'CELLS %d %d\n', nelem, cellsize);
+buf = cell(nelem,1);
 if any(triMask)
-    tri = elem(triMask,1:3)-1; % 0-based
-    fprintf(fid, '          %d %d %d\n', tri');
+    tri = elem(triMask,1:3) - 1;
+    buf(triMask) = cellstr(num2str(tri, '3 %d %d %d'));
 end
-% Quadriláteros
 if any(quadMask)
-    quad = elem(quadMask,1:4)-1;
-    fprintf(fid, '          %d %d %d %d\n', quad');
+    quad = elem(quadMask,1:4) - 1;
+    buf(quadMask) = cellstr(num2str(quad, '4 %d %d %d %d'));
 end
-fprintf(fid, '        </DataArray>\n');
+fprintf(fid, '%s\n', buf{:});
 
-% Offsets
-fprintf(fid, '        <DataArray type="Int32" Name="offsets" format="ascii">\n');
-offset = cumsum(3*triMask + 4*quadMask);
-fprintf(fid, '          %d\n', offset);
-fprintf(fid, '        </DataArray>\n');
+fprintf(fid, 'CELL_TYPES %d\n', nelem);
+celltypes = zeros(nelem,1);
+celltypes(triMask)  = 5;
+celltypes(quadMask) = 9;
+fprintf(fid, '%d\n', celltypes);
 
-% Cell types
-fprintf(fid, '        <DataArray type="UInt8" Name="types" format="ascii">\n');
-celltypes = zeros(nelem,1,'uint8');
-celltypes(triMask) = 5; % VTK_TRIANGLE
-celltypes(quadMask) = 9; % VTK_QUAD
-fprintf(fid, '          %d\n', celltypes);
-fprintf(fid, '        </DataArray>\n');
+fprintf(fid, 'CELL_DATA %d\n', nelem);
 
-fprintf(fid, '      </Cells>\n');
-
-% -------------------------------------------------
-% CELL DATA
-% -------------------------------------------------
-fprintf(fid, '      <CellData Scalars="Pressure">\n');
-
-% PRESSURE
-fprintf(fid, '        <DataArray type="Float32" Name="Pressure" format="ascii">\n');
-fprintf(fid, '          %.16E\n', pressure);
-fprintf(fid, '        </DataArray>\n');
-
-% Saturation / Concentration
-if 200<auxnumcase && auxnumcase<300
-    satName = 'Concentration';
-else
-    satName = 'ExactSolution';
+if ~isempty(options.pressure)
+    fprintf(fid, 'SCALARS Pressure float 1\n');
+    fprintf(fid, 'LOOKUP_TABLE default\n');
+    fprintf(fid, '%.6E\n', options.pressure);
 end
-fprintf(fid, '        <DataArray type="Float32" Name="%s" format="ascii">\n', satName);
-fprintf(fid, '          %.16E\n', watersaturation);
-fprintf(fid, '        </DataArray>\n');
 
-% Norm permeability
-fprintf(fid, '        <DataArray type="Float32" Name="FlowresultZ" format="ascii">\n');
-fprintf(fid, '          %.16E\n', normk);
-fprintf(fid, '        </DataArray>\n');
+if ~isempty(options.exact_sol)
+    fprintf(fid, 'SCALARS exact_solution float 1\n');
+    fprintf(fid, 'LOOKUP_TABLE default\n');
+    fprintf(fid, '%.6E\n', options.exact_sol);
+end
 
-fprintf(fid, '      </CellData>\n');
+if ~isempty(options.watersaturation)
+    if ~isempty(options.satLabel)
+        satName = options.satLabel;
+    elseif 200 < auxnumcase && auxnumcase < 300
+        satName = 'Concentration';
+    else
+        satName = 'WaterContent';
+    end
+    fprintf(fid, 'SCALARS %s float 1\n', satName);
+    fprintf(fid, 'LOOKUP_TABLE default\n');
+    fprintf(fid, '%.6E\n', options.watersaturation);
+end
 
-% -------------------------------------------------
-% Fecha XML
-% -------------------------------------------------
-fprintf(fid, '    </Piece>\n');
-fprintf(fid, '  </UnstructuredGrid>\n');
-fprintf(fid, '</VTKFile>\n');
+if ~isempty(options.normk)
+    fprintf(fid, 'SCALARS FlowresultZ float 1\n');
+    fprintf(fid, 'LOOKUP_TABLE default\n');
+    fprintf(fid, '%.6E\n', options.normk);
+end
+
+if ~isempty(options.exact_sol)
+    fprintf(fid, 'SCALARS ExactSolution float 1\n');
+    fprintf(fid, 'LOOKUP_TABLE default\n');
+    fprintf(fid, '%.6E\n', options.exact_sol);
+end
 
 fclose(fid);
-
 end

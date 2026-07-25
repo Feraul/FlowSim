@@ -298,7 +298,8 @@ classdef Caso439 < SimulacaoBase
             end
 
             % calcula theta e salva VTK
-            postprocessor(h, theta_n, 0*flowresultZ, time, env, count, parms);
+            postprocessor(env, count, time, parms,pressure=h,...
+                theta_n=theta_n, normk=0,flowresultz=flowresultZ);
         end
 
         % ── 13. Criterio de parada ────────────────────────────────

@@ -1,4 +1,4 @@
-function [sourcevector] = PLUG_sourcefunction(P,env,time,parmRichardEq)
+function [sourcevector] = PLUG_sourcefunction(P,env,time,parms)
 
 
 elem=env.geometry.elem;
@@ -6,8 +6,8 @@ centelem=env.geometry.centelem;
 elemarea=env.geometry.elemarea;
 numcase=env.config.numcase;
 if numcase>400
-    alpha=parmRichardEq.alpha;
-    nvg= parmRichardEq.nvg;
+    alpha=parms.alpha;
+    nvg= parms.nvg;
 end
 n = size(elem,1);
 
@@ -24,8 +24,8 @@ switch numcase
     case 436
 
         % Parâmetros
-        alpha = parmRichardEq.alpha;
-        n   = parmRichardEq.nvg;
+        alpha = parms.alpha;
+        n   = parms.nvg;
         Kabs = 0.03;
         mu    = 1;
 
@@ -36,49 +36,49 @@ switch numcase
 
         % ========================================================================
 
-% -------------------- Solução p(x,y,t) ----------------------------------
-p = -3*t .* x.*(1-x).*y.*(1-y) - 1;
+        % -------------------- Solução p(x,y,t) ----------------------------------
+        p = -3*t .* x.*(1-x).*y.*(1-y) - 1;
 
-% Derivadas de p
-pt1  = -3 * x.*(1-x).*y.*(1-y); % ok
+        % Derivadas de p
+        pt1  = -3 * x.*(1-x).*y.*(1-y); % ok
 
-px  = -3*t * (1-2*x).*y.*(1-y);
-py  = -3*t * x.*(1-x).*(1-2*y);
+        px  = -3*t * (1-2*x).*y.*(1-y);
+        py  = -3*t * x.*(1-x).*(1-2*y);
 
-grad2 = px.^2 + py.^2;
+        grad2 = px.^2 + py.^2;
 
-lap_p = 6*t * ( x.*(1-x) + y.*(1-y) ); %ok
+        lap_p = 6*t * ( x.*(1-x) + y.*(1-y) ); %ok
 
-% -------------------- Theta(p) ------------------------------------------
-A1 = (-alpha*p).^n;
+        % -------------------- Theta(p) ------------------------------------------
+        A1 = (-alpha*p).^n;
 
-theta = (1 + A1).^(-(n-1)/n);
+        theta = (1 + A1).^(-(n-1)/n);
 
-% -------------------- dtheta/dp -----------------------------------------
-dtheta_dp1 = (n-1)*alpha * (-alpha*p).^(n-1) .* (1 + A1).^(-(2*n-1)/n); %ok
+        % -------------------- dtheta/dp -----------------------------------------
+        dtheta_dp1 = (n-1)*alpha * (-alpha*p).^(n-1) .* (1 + A1).^(-(2*n-1)/n); %ok
 
-% -------------------- kappa(theta) --------------------------------------
-m = n/(n-1);
-beta = (n-1)/n;
+        % -------------------- kappa(theta) --------------------------------------
+        m = n/(n-1);
+        beta = (n-1)/n;
 
-theta_m = theta.^m;
+        theta_m = theta.^m;
 
-% regularização numérica
-base = 1 - theta_m;
+        % regularização numérica
+        base = 1 - theta_m;
 
-B = base.^beta;
-T = 1 - B;
+        B = base.^beta;
+        T = 1 - B;
 
-kappa = (Kabs/mu) * sqrt(theta) .* T.^2;
+        kappa = (Kabs/mu) * sqrt(theta) .* T.^2;
 
-% -------------------- dkappa/dtheta -------------------------------------
-dT_dtheta = m*beta * base.^(beta-1) .* theta.^(m-1);
+        % -------------------- dkappa/dtheta -------------------------------------
+        dT_dtheta = m*beta * base.^(beta-1) .* theta.^(m-1);
 
-dkappa_dtheta = (Kabs/mu) * (0.5 * theta.^(-1/2) .* T.^2 + ...
-                              2 * sqrt(theta) .* T .* dT_dtheta );
+        dkappa_dtheta = (Kabs/mu) * (0.5 * theta.^(-1/2) .* T.^2 + ...
+            2 * sqrt(theta) .* T .* dT_dtheta );
 
-% -------------------- Termo fonte f -------------------------------------
-f = dtheta_dp1 .* pt1  - kappa .* lap_p - dkappa_dtheta .* dtheta_dp1 .* grad2;
+        % -------------------- Termo fonte f -------------------------------------
+        f = dtheta_dp1 .* pt1  - kappa .* lap_p - dkappa_dtheta .* dtheta_dp1 .* grad2;
 
 
         % ------------------ vetor fonte ----------------------------
