@@ -37,7 +37,7 @@ C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic406
 // Se colocar "0", o programa cria "Results" dentro da pasta acima.
 //----------------------------------------------------------------------
                                                         // >>> EDITE AQUI <<<
-teste_MPFAD_tri_128_Tempo
+teste_TPFA_quad_128_Tempo
 
 
 //======================================================================
@@ -96,7 +96,7 @@ n
 //   [mpfao] MPFA tipo O | [fps] MPFA tipo FPS | [mpfae] MPFA Enriquecido
 //   [mpfad] MPFA Diamond | [mpfaql] MPFA-QL | [mpfah] MPFA-H
 //   [nlfvpp] Nao-Linear (lpew) | [nlfvh] Nao-Linear (ponto harmonico)
-mpfad
+tpfa
 
 // Se [fps] ou [mpfae]: fator do volume de controle auxiliar.
 0.2

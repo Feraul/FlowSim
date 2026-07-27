@@ -99,7 +99,7 @@ classdef Caso436 < SimulacaoBase
 
             parms.h_init=-1*ones(size(env.geometry.elem,1),1);
             parms.h_old=-5*ones(size(env.geometry.elem,1),1);
-            parms.dt= (1/32);
+            parms.dt= (1/64);
         end
 
         % ── 5. Fontes e pocos ─────────────────────────────────────
