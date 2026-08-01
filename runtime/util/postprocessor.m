@@ -6,7 +6,11 @@ arguments
     options.pressure         = []
     options.watersaturation  = []
     options.theta_n          = []
+    options.k_theta          = []
+
     options.exact_sol        = []
+    options.theta_exact      = []
+    options.k_theta_exact    = []
     options.normk            = []
     options.satLabel         = ''   % permite sobrescrever o nome do campo (ex: 'Theta')
 end
@@ -61,12 +65,35 @@ if ~isempty(options.pressure)
     fprintf(fid, '%.6E\n', options.pressure);
 end
 
+if ~isempty(options.theta_n)
+    fprintf(fid, 'SCALARS theta_numerico float 1\n');
+    fprintf(fid, 'LOOKUP_TABLE default\n');
+    fprintf(fid, '%.6E\n', options.theta_n);
+end
+
+if ~isempty(options.k_theta)
+    fprintf(fid, 'SCALARS K_theta float 1\n');
+    fprintf(fid, 'LOOKUP_TABLE default\n');
+    fprintf(fid, '%.6E\n', options.k_theta);
+end
+%==========================================================================
 if ~isempty(options.exact_sol)
     fprintf(fid, 'SCALARS exact_solution float 1\n');
     fprintf(fid, 'LOOKUP_TABLE default\n');
     fprintf(fid, '%.6E\n', options.exact_sol);
 end
+if ~isempty(options.theta_exact)
+    fprintf(fid, 'SCALARS theta_exact_solution float 1\n');
+    fprintf(fid, 'LOOKUP_TABLE default\n');
+    fprintf(fid, '%.6E\n', options.theta_exact);
+end
 
+if ~isempty(options.k_theta_exact)
+    fprintf(fid, 'SCALARS K_theta_exact_solution float 1\n');
+    fprintf(fid, 'LOOKUP_TABLE default\n');
+    fprintf(fid, '%.6E\n', options.k_theta_exact);
+end
+%==========================================================================
 if ~isempty(options.watersaturation)
     if ~isempty(options.satLabel)
         satName = options.satLabel;

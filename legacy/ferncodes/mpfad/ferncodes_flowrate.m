@@ -134,5 +134,4 @@ if (200<numcase && numcase<300) || (379<numcase && numcase<400)
 end
 
 faceaux=0;
-
 end

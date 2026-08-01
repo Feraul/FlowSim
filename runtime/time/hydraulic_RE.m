@@ -98,7 +98,7 @@ while stopcriteria < 100
     % atualizarPremethod → recalcula Kde, Ded, Kn, Kt, pesos LPEW2 com novo kmap
     [env,parms] = PLUG_kfunction(env, parms, time);
     [env] = metodo.atualizarPremethod(env, parms);
-    %%   
+    %%
     source_wells = benchmark.definirFontes(env, parms, time);
 
     %% ── 6. Atualiza flags se necessario ──────────────────────────

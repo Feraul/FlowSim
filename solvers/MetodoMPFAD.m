@@ -129,6 +129,8 @@ classdef MetodoMPFAD < MetodoBase
                     [p, flowrate, flowresult, flowratedif, faceaux, parms, env] = ...
                         ferncodes_iterpicard(M, I, parms, env, tempo, dt, source_wells);
 
+                    
+
                 case 'AA'
                     % Aceleracao de Anderson — reduz numero de iteracoes de Picard
                     [p, flowrate, flowresult, flowratedif, faceaux, parms] = ...
