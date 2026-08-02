@@ -4,6 +4,8 @@ from typing import Any, Dict
 
 import numpy as np
 
+from fs.indexing import to_zero_based
+
 
 def build(env: Dict[str, Any]) -> Dict[str, Any]:
     """Create the vectorization-friendly FS structure without mutating ``env``."""
@@ -24,9 +26,9 @@ def build(env: Dict[str, Any]) -> Dict[str, Any]:
         "elem": elem,
         "bedge": bedge,
         "inedge": inedge,
-        "nsurn1": _zero_based(geometry["nsurn1"], coord.shape[0], "nsurn1"),
+        "nsurn1": to_zero_based(geometry["nsurn1"], coord.shape[0], "nsurn1"),
         "nsurn2": np.asarray(geometry["nsurn2"], dtype=int).reshape(-1),
-        "esurn1": _zero_based(geometry["esurn1"], elem.shape[0], "esurn1"),
+        "esurn1": to_zero_based(geometry["esurn1"], elem.shape[0], "esurn1"),
         "esurn2": np.asarray(geometry["esurn2"], dtype=int).reshape(-1),
     }
 
@@ -61,18 +63,3 @@ def build(env: Dict[str, Any]) -> Dict[str, Any]:
         "state": {},
         "workspace": {},
     }
-
-
-def _zero_based(values: Any, size: int, name: str) -> np.ndarray:
-    indices = np.asarray(values, dtype=int).reshape(-1)
-    if indices.size == 0:
-        return indices
-    if np.any(indices < 0):
-        raise ValueError(f"{name} contains a negative index")
-    if np.any(indices == 0):
-        if np.any(indices >= size):
-            raise ValueError(f"{name} contains an index outside 0..{size - 1}")
-        return indices
-    if np.any(indices > size):
-        raise ValueError(f"{name} contains an index outside 1..{size}")
-    return indices - 1
