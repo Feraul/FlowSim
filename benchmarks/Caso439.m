@@ -135,8 +135,8 @@ classdef Caso439 < SimulacaoBase
         % ── 5. Fontes e pocos ─────────────────────────────────────
         % Delega a definicao de pocos injetores/produtores para
         % a funcao padrao defineWells
-        function wells = definirFontes(obj, env, pR)
-            wells = defineWells(env, pR);
+        function source_wells = definirFontes(obj, env, parms, time)
+            source_wells = false;
         end
 
         % ── 6a. Modelo de retencao hidrica — Brooks-Corey ─────────
@@ -271,7 +271,31 @@ classdef Caso439 < SimulacaoBase
         % Localiza os elementos de monitoramento (6 pontos de observacao)
         % salva os indices em .mat para reutilizar em simulacoes futuras
         % e inicializa as series temporais de h e theta
-        function [parms] = inicializar(obj, env, parms, time)            
+        function [parms,extras] = inicializar(obj, env, options)
+
+             arguments
+                obj
+                env
+                options.parms = []
+                options.time=[]
+                options.theta_init = []
+             end
+            parms=options.parms;
+            time=options.time;
+            theta_init=options.theta_init;
+
+            elemarea=env.geometry.elemarea;
+            extras.time_storage = time(1);      % t = 0
+            extras.MBE          = 0;
+            extras.MBE_rel      = 0;
+            extras.MBE_ratio    = NaN;          % indefinido em t=0 (dS = 0)
+            extras.maxRloc      = 0;
+            extras.L1_MBE       = 0;
+            extras.L2_MBE       = 0;
+
+            extras.mass_stored   = sum(elemarea .* theta_init);   % <- ajustar nomes
+            extras.mass_acc_flux = extras.mass_stored;
+            extras.infilt_acc    = 0;
         end
 
         % ── 12. Atualizacao dentro do loop temporal ────────────────
@@ -280,8 +304,14 @@ classdef Caso439 < SimulacaoBase
         %      (h_old = +20 na zona saturada, -30 na nao saturada)
         %   2. Chama o pos-processador para salvar VTK
         %   3. Armazena h e theta nos pontos de monitoramento
-        function [parms] = atualizarEstado(obj, env, parms, ...
-                h, theta_n, time, count)
+        function [parms,extras] = atualizarEstado(obj, env, parms, ...
+                h, theta_n, time, count,flowrate,extras)
+            elemarea=env.geometry.elemarea;
+            % ── MBE: captura theta_old ANTES de parms.h_init ser sobrescrito ──
+            % parms.h_init aqui ainda e o h_n que soil_properties usou como
+            % nivel de tempo anterior PARA ESTE passo (so e sobrescrito mais
+            % abaixo, com o valor exato do novo tempo).
+            theta_old_MBE = obj.calcularTheta(parms.h_init, parms);
 
             % chute inicial para proxima iteracao de Picard
             p_old        = zeros(size(h));
@@ -289,6 +319,8 @@ classdef Caso439 < SimulacaoBase
             p_old(h <  0) = -30;   % zona nao saturada
             parms.h_old  = p_old;
             parms.h_init = h;      % atualiza condicao inicial para proximo dt
+            bedge    = env.geometry.bedge;    % faces de contorno (boundary edges)
+            sizebedge       = size(bedge,1);              % numero de faces de contorno
 
             % flowresultZ: fluxo gravitacional acumulado por elemento
             if strcmp(env.config.pmethod,'tpfa')
@@ -298,8 +330,30 @@ classdef Caso439 < SimulacaoBase
             end
 
             % calcula theta e salva VTK
-            postprocessor(env, count, time, parms,pressure=h,...
+            postprocessor(env, count, time,pressure=h,...
                 theta_n=theta_n, normk=0,flowresultz=flowresultZ);
+
+            %% ── MBE (balanco de massa) deste passo ────────────────────
+            % sourcevector deve ser avaliado no MESMO tempo usado no solve
+            % que gerou "h" (h_new): como source_wells e recalculado em
+            % hydraulic_RE APOS o incremento de "time", a fonte realmente
+            % usada neste passo foi avaliada em (time - dt), nao em "time".
+            dt    = parms.dt;
+            time_old_MBE = time - dt;
+            [flowrate_MBE, flowresult_MBE, ~, ~] = env.metodo.calcularFlowrate(h, env, parms);
+            sourcevector_MBE = PLUG_sourcefunction(h, env, time_old_MBE, parms);
+
+            [MBEval, MBE_rel, MBE_ratio,Rloc, L1_MBE, L2_MBE] = ferncodes_MBE(theta_old_MBE, theta_n, ...
+                flowrate_MBE, flowresult_MBE, sourcevector_MBE, elemarea, dt, ...
+                sizebedge, +1);
+
+            extras.MBE(count)          = MBEval;
+            extras.MBE_ratio(count)      = MBE_ratio;
+            extras.MBE_rel(count)      = MBE_rel;
+            extras.maxRloc(count)      = max(abs(Rloc));
+            extras.L1_MBE(count)       = L1_MBE;   % norma L1 intensiva (para grafico log-log)
+            extras.L2_MBE(count)       = L2_MBE;   % norma L2 intensiva (para grafico log-log)
+            extras.time_storage(count) = time;   % para plotar MBE(t) em finalizar
         end
 
         % ── 13. Criterio de parada ────────────────────────────────
@@ -323,1194 +377,1259 @@ classdef Caso439 < SimulacaoBase
             arguments
                 obj
                 env
-                options.theta_n = []
-                options.theta_init_num = []
-                options.p = []
-                options.flowrate = []
+                options.theta_n         = []
+                options.theta_init_num  = []
+                options.p                = []
+                options.flowrate         = []
+                options.extras           = struct()
             end
             
             elem=env.geometry.elem;
             coord=env.geometry.coord;
+            
+            if isfield(options.extras,'MBE')
+                fprintf('MBE global (soma sobre os passos): %.6e\n', sum(options.extras.MBE));
+                fprintf('MBE_rel maximo entre os passos:    %.6e\n', max(options.extras.MBE_rel));
+                fprintf('max|Rloc| (pior elemento, todos os passos): %.6e\n', max(options.extras.maxRloc));
+                fprintf('L1_MBE maximo entre os passos (intensivo):  %.6e\n', max(options.extras.L1_MBE));
+                fprintf('L2_MBE maximo entre os passos (intensivo):  %.6e\n', max(options.extras.L2_MBE));
+                fprintf('MBE_ratio: min = %.6f, max = %.6f, desvio max de 1 = %.3e\n', ...
+                    min(options.extras.MBE_ratio), max(options.extras.MBE_ratio), ...
+                    max(abs(options.extras.MBE_ratio - 1)));
 
-            % quadrilatero
-            figure(1)
-            % tempo=2
-            % MPFA-D e TPFA ortogonal
-            A1=[300.0  65.0;
-                100.0  70.0656;
-                28.9426 78.4877];
-            plot(A1(:,1), A1(:,2),'o')
-            hold on
-            % MPFA-D distorcido
-            C1=[0	81.8198
-                13.8135	81.1523
-                27.8174	80.4857
-                40.0743	78.4163
-                65.6374	74.6297
-                98.1984	72.2581
-                144.064	68.8685
-                187.473	68.2704
-                300	65];
-            plot(C1(:,1), C1(:,2))
-            hold on
-            % TPFA distorcido
-            C2=[0	82.7826
-                25.8440	81.3913
-                51.6880	77.5652
-                84.1676	73.7391
-                148.079	68.8696
-                207.101	67.4783
-                300.000	65.0   ];
-            plot(C2(:,1), C2(:,2))
-            hold on
-            B1=[0	80
-                5.93714	79.9302
-                11.5250	79.9302
-                17.4622	79.5812
-                22.7008	78.8831
-                27.9395	78.5340
-                35.2736	77.4869
-                42.2584	76.4398
-                49.5925	75.7417
-                58.3236	74.3456
-                65.6577	73.2984
-                76.1350	71.9023
-                100.233	69.4590
-                112.806	68.0628
-                129.220	67.0157
-                139.697	65.9686
-                150.524	65
-                300.000	65 ];
-            plot(B1(:,1), B1(:,2),'-')
-            hold on
-            % tempo=3
-            % MPFA-D e TPFA
-            A2=[300	65
-                161.698	75.5158
-                70.00	91.5765
-                2.28041	    100];
-            plot(A2(:,1), A2(:,2),'o')
-            hold on
-            % MPFA-D quadrilatero distorcido
-            C3=[0	101.903
-                14.5254	101.099
-                34.8427	98.6191
-                59.8216	93.6154
-                84.7992	89.0345
-                111.045	84.8801
-                151.683	78.6520
-                202.473	73.7211
-                300.0	65.0];
-            plot(C3(:,1), C3(:,2))
-            hold on
-            % TPFA quadrilatero distorcido
-            C4=[0.0	100.524
-                24.7094	99.1565
-                53.0363	94.6519
-                85.5607	88.7560
-                129.974	81.8269
-                205.859	73.1891
-                300.0	65.0 ];
-            plot(C4(:,1), C4(:,2))
-            hold on
-
-            B2=[0	100
-                11.0337	99.9812
-                23.5784	99.3283
-                33.3361	97.9411
-                46.2305	95.8582
-                57.0343	93.7729
-                68.8838	91.3391
-                80.0365	88.9046
-                91.5371	86.8201
-                104.780	84.3880
-                123.599	81.6127
-                142.765	79.1875
-                164.371	76.0
-                196.779	73.3064
-                228.141	70.5457
-                266.473	67.0939
-                300	65.0];
-            plot(B2(:,1), B2(:,2),'-')
-            hold on
-            % tempo=4
-            % MPFA-D e TPFA quad ortogonal
-            A3=[300	65
-                161.698	82.5585
-                129.780	89.98
-                70.00	101.622
-                2.28041	110];
-            plot(A3(:,1), A3(:,2),'o')
-            hold on
-            % MPFA-D quad distorcido
-
-            C4=[0.0	109.185
-                22.3412	108.202
-                45.3857	104.159
-                61.2612	101.125
-                82.2579	97.0789
-                112.474	90.4977
-                159.584	83.9451
-                200.038	77.8914
-                245.610	72.8669
-                300.0	65.0 ];
-            plot(C4(:,1), C4(:,2),'o')
-            hold on
-            % TPFA quad distorcido
-            C5=[0.0	108.668
-                23.2068	107.400
-                42.1941	104.440
-                61.1814	99.7886
-                90.2954	95.5603
-                131.224	88.3721
-                176.793	80.7611
-                241.350	73.1501
-                300.00	65.0];
-            plot(C5(:,1), C5(:,2))
-            hold on
-
-            B3=[0	110
-                9.28058	109.610
-                19.3859	108.923
-                28.0979	107.886
-                39.2497	106.154
-                53.1902	103.378
-                67.1311	100.253
-                82.4658	97.1292
-                95.7094	94.3523
-                112.438	90.8814
-                126.378	88.8034
-                146.242	85.6851
-                183.879	80.4933
-                233.364	73.9191
-                300	65];
-            plot(B3(:,1), B3(:,2),'-')
-            hold on
-            % tempo=8
-            % MPFA-D e TPFA quad ortogonal
-            A4=[300	65
-                161.698	95.2342
-                129.780	102.227
-                70.0	114.354
-                36.6371	119.324
-                11.6036	119.705
-                2.28041	120];
-            plot(A4(:,1), A4(:,2),'o')
-            hold on
-            % MPFA-D  quad distorcido
-            C6=[0.0	120.676
-                18.4741	120.281
-                36.2736	118.196
-                53.6513	114.845
-                79.0833	108.973
-                119.348	101.435
-                158.766	93.8956
-                188.859	87.6088
-                265.576	72.5268
-                300.0	65.0];
-            plot(C6(:,1), C6(:,2))
-            hold on
-            % TPFA  quad distorcido
-            C7=[0.0	118.395
-                20.5957	118.001
-                43.4824	114.227
-                74.8466	108.352
-                114.688	100.797
-                167.668	91.1465
-                249.468	76.4625
-                300.0	65.00];
-            plot(C7(:,1), C7(:,2))
-            hold on
-
-            B4=[0.697674	120
-                9.41860	119.930
-                36.2791	118.531
-                72.9070	110.839
-                103.953	103.497
-                134.302	97.2028
-                162.907	91.6084
-                215.930	81.8182
-                257.093	73.4266
-                300.000	65];
-
-            plot(B4(:,1), B4(:,2),'-')
-
-            xlabel('Aquifer Lenght')
-            ylabel('Z')
-            grid
-
-
-            %% triangulo
-            figure(2)
-            % tempo=2
-            % experimental
-            A1=[300.0  65.0;
-                100.0  70.0656;
-                28.9426 78.4877];
-            plot(A1(:,1), A1(:,2),'o')
-            hold on
-            % MPFA-D tri
-            C1=[0.0	83.7209
-                14.9059	83.2773
-                35.1840	80.7117
-                59.2637	77.2951
-                94.3281	73.0173
-                170.378	68.6818
-                300.0	65.0];
-            plot(C1(:,1), C1(:,2))
-            hold on
-            % TPFA tri
-            C2=[0.0	70.1571
-                10.4895	69.1099
-                41.9580	69.4590
-                103.147	68.0628
-                154.895	66.3176
-                242.308	65.0
-                300.000	65.0
-                ];
-            plot(C2(:,1), C2(:,2))
-            hold on
-            % MPFAD tri distorcido
-            B1=[0.0 	83.3005
-                40.8202	79.1879
-                90.3452	72.5621
-                177.524	67.7338
-                300.0	65.0 ];
-            plot(B1(:,1), B1(:,2),'-')
-            hold on
-            % TPFA tri distorcido
-            W1=[0.0	71.2058
-                36.8553	70.9413
-                74.9243	70.3318
-                135.350	67.6801
-                214.981	66.1201
-                300.0	65.0];
-            plot(W1(:,1), W1(:,2))
-            hold on
-            %--------------------------------------------------------------
-            % tempo=3
-            % experimental
-            A2=[300	65
-                161.698	75.5158
-                70.00	91.5765
-                2.28041	    100];
-            plot(A2(:,1), A2(:,2),'o')
-            hold on
-            % MPFAD  tri
-            C3=[0.0	104.001
-                16.8049	101.918
-                34.6039	100.259
-                49.8616	97.7541
-                71.4790	92.7318
-                96.4861	87.7142
-                133.358	82.2922
-                168.110	77.7094
-                213.032	73.1409
-                300.00	65.00      ];
-            plot(C3(:,1), C3(:,2))
-            hold on
-            % TPFA tri
-            C4=[0.00000	92.6829
-                11.1758	92.3345
-                39.8137	92.6829
-                61.8161	91.2892
-                87.3108	88.1533
-                122.584	82.9268
-                163.097	77.0035
-                232.247	70.3833
-                300.00	65.00 ];
-            plot(C4(:,1), C4(:,2))
-            hold on
-            % MPFA-D tri distocido
-            B2=[0.00	103.832
-                29.1552	101.328
-                74.0825	92.5125
-                115.180	85.0999
-                176.834	76.9427
-                239.885	70.5244
-                300.00	65.00   ];
-            plot(B2(:,1), B2(:,2),'-')
-            hold on
-            % TPFA tri distorcido
-            W1=[0.241752	92.1743
-                33.3812	92.2127
-                55.0095	91.8900
-                80.4774	89.4847
-                110.134	84.6495
-                152.699	78.7858
-                205.032	72.9335
-                300.273	65.0439];
-            plot(W1(:,1), W1(:,2))
-            hold on
-            %--------------------------------------------------------------
-            % tempo=4
-            % experimental
-            A3=[300	65
-                161.698	82.5585
-                129.780	89.98
-                70.00	101.622
-                2.28041	110];
-            plot(A3(:,1), A3(:,2),'o')
-            hold on
-            % MPFA-D tri
-
-            C4=[0.00	112.237
-                9.93192	111.527
-                21.1325	110.465
-                34.0831	109.051
-                51.5823	105.884
-                68.0305	102.019
-                96.0282	96.0421
-                121.227	91.1176
-                154.475	85.1348
-                199.625	78.7884
-                300.00	65.00];
-            plot(C4(:,1), C4(:,2))
-            hold on
-            % TPFA tri
-            C5=[0.00000	101.571
-                8.03260	100.524
-                33.5274	101.222
-                52.7357	100.175
-                85.9139	96.3351
-                105.122	92.4956
-                131.665	87.9581
-                161.001	83.4206
-                300.00	65.00  ];
-            plot(C5(:,1), C5(:,2))
-            hold on
-            % MPFAD tri distorcido
-            B3=[0.00000	112.391
-                18.5315	111.344
-                33.5664	109.599
-                58.0420	103.316
-                93.0070	96.6841
-                128.322	90.4014
-                176.573	83.0716
-                227.622	74.6946
-                300.00	65.00
-                ];
-            plot(B3(:,1), B3(:,2))
-            hold on
-            % TPFA tri distorcido
-            W1=[0.00	101.394
-                34.1860	100.000
-                71.1628	97.2125
-                104.651	92.3345
-                151.395	84.6690
-                202.326	77.3519
-                258.488	70.3833
-                300.00	65.00
-                ];
-            plot(W1(:,1), W1(:,2))
-            hold on
-            % tempo=8
-            % experimental
-            A4=[300	65
-                161.698	95.2342
-                129.780	102.227
-                70.0	114.354
-                36.6371	119.324
-                11.6036	119.705
-                2.28041	120];
-            plot(A4(:,1), A4(:,2),'o')
-            hold on
-            % MPFA-D  tri
-            C6=[0.00	124.297
-                19.9319	122.762
-                39.3526	119.693
-                63.8842	114.066
-                95.0596	107.417
-                137.479	98.7212
-                194.208	87.9795
-                300.00	65.00];
-            plot(C6(:,1), C6(:,2))
-            hold on
-            % TPFA  tri
-            W1=[0.920582	110.491
-                11.7605	109.804
-                44.6276	109.842
-                61.0616	109.512
-                78.1977	106.734
-                99.8809	102.564
-                146.394	93.8769
-                249.214	74.7659
-                300.974	65.0361
-                ];
-            plot(W1(:,1), W1(:,2))
-            hold on
-            % MPFAD tri distorcido
-            Z1=[0.00	122.996
-                0.494247	122.996
-                25.3463	121.225
-                48.7957	117.365
-                79.2422	110.012
-                130.689	100.196
-                166.386	92.1410
-                220.982	81.6246
-                300.00	65.00];
-            plot(Z1(:,1), Z1(:,2))
-            hold on
-            % TPFA tri distorcido
-            Z2=[0.00	108.902
-                37.2862	108.247
-                67.7074	106.886
-                83.7937	104.810
-                102.679	101.342
-                129.259	95.7881
-                157.587	90.5855
-                204.100	82.2626
-                300.00	65.00];
-
-            plot(Z2(:,1), Z2(:,2))
-
-            hold on
-            xlabel('Aquifer Lenght')
-            ylabel('Z')
-            grid
-
-
-
-            %% --------------------------------------------------------------------------
-            if max(max(elem(:,4)))~=0
-                figure(3)
-
-                % Malha quadrilateral ortogonal
-                %centro = obj.elementos_centroide_na_caixa(elem, coord, [-Inf 200], [20 25]);
-                cacheFile = fullfile(fileparts(fileparts(mfilename('fullpath'))), 'data', 'centro_x=20_quad.mat');
-                if isfile(cacheFile), centro = load(cacheFile).centro;
-                else
-                 centro = obj.elementos_centroide_na_caixa(elem, coord, [-Inf 200], [20 25]); 
-                 save(cacheFile, 'centro'); 
-                end
-                filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_MPFAD_quad_08';
-                fname = fullfile(filepath);
-                theta_n = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_quad_08_1WaterContent_steptime3.txt'));
-                centelem = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_quad_08_1centrocell3.txt'));
-                centroY=centelem(centro,2);
-                % MPFA-D
-                % theta_n --> T=8
-                theta_aux=theta_n(:,end);
-                theta_init=theta_n(:,2);
-                theta=theta_aux(centro);
+                % ── Figura para o artigo: MBE ao longo do tempo ──────────
+                % indice 1 = t=0 (nao usado, ver "inicializar"); descarta na plotagem
+                tt     = options.extras.time_storage(2:end);
+                mbe    = abs(options.extras.MBE(2:end));
+                mrel   = options.extras.MBE_rel(2:end);
+                rloc   = options.extras.maxRloc(2:end);
+                mratio = options.extras.MBE_ratio(2:end);
                 
-                plot(theta, centroY)
-                hold on
-                % theta_n --> T=0
-                plot(theta_init(centro),centroY)
-                hold on
-
-                % Malha quadrilateral distorcido
-                % MPFA D
-                filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_MPFAD_quad_distorcido_08';
-                fname = fullfile(filepath);
-                theta_n = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_quad_distorcido_08_1WaterContent_steptime3.txt'));
-                % MPFA-D
-                % theta_n --> T=8
-                theta_aux=theta_n(:,end);
-
-                theta=theta_aux(centro);
-
-                plot(theta, centroY)
-                hold on
-                % TPFA
-                % theta_n --> T=8
-                filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_TPFA_quad_distorcido_08';
-                fname = fullfile(filepath);
-                theta_n = readmatrix(fullfile(fname, 'Tables_teste_TPFA_quad_distorcido_08_1WaterContent_steptime3.txt'));
-                theta_aux=theta_n(:,end);
-
-                theta=theta_aux(centro);
-
-                plot(theta, centroY)
-                hold on
-
-                % theta experimental TEMPO=0
-                T1=[0.309198	200-130.634
-                    0.304946	200-121.653
-                    0.319766	200-111.612
-                    0.143656	200-100.410
-                    0.142113	200-90.3880
-                    0.0642259	200-81.4914
-                    0.0558460	200-70.4409
-                    0.0406789	200-61.1264
-                    0.0473110	200-50.7499
-                    0.0307680	200-40.7457
-                    0.0156071	200-31.7768
-                    0.00315489	200-21.7679
-                    0.00980558	200-12.4283
-                    ];
-                plot(T1(:,1), T1(:,2),'o')
-                hold on
-
-                % theta experimental TEMPO= 8
-               T2=[0.319091	200-100.900
-                    0.301364	200-90.9002
-                    0.283636	200-80.8976
-                    0.271364	200-70.8871
-                    0.271364	200-60.8625
-                    0.253636	200-50.8693
-                    0.249545	200-40.1613
-                    0.250909	200-31.5192
-                    0.250909	200-21.4883
-                    0.253636	200-12.1518];
-
-                plot(T2(:,1), T2(:,2),'o')
-                xlabel('Water Content')
-                ylabel('Z')
-                title('x=21')
-                grid
-                %% ============================================================
-                % x=80
-                figure(4)
                 
-                cacheFile = fullfile(fileparts(fileparts(mfilename('fullpath'))), 'data', 'centro_x=80_quad.mat');
-                if isfile(cacheFile), centro_80 = load(cacheFile).centro_80;
-                else
-                 centro_80 = obj.elementos_centroide_na_caixa(elem, coord, [-Inf 200], [80 85]); 
-                 save(cacheFile, 'centro_80'); 
-                end
 
-                filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_MPFAD_quad_08';
-                fname = fullfile(filepath);
-                theta_n = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_quad_08_1WaterContent_steptime3.txt'));
-                centelem = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_quad_08_1centrocell3.txt'));
-                centroY_80=centelem(centro_80,2);
-                % MPFA-D
-                % theta_n --> T=0 e 8
-                theta_aux=theta_n(:,end);
-                theta_init=theta_n(:,2);
-                theta_80=theta_aux(centro_80);
-                
-                plot(theta_80, centroY_80)
-                hold on
-                plot(theta_init(centro_80),centroY_80)
-                hold on
-                % malha quadrilateral distorcido
-                % MPFAD
-                filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_MPFAD_quad_distorcido_08';
-                fname = fullfile(filepath);
-                theta_n = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_quad_distorcido_08_1WaterContent_steptime3.txt'));
+                figure('Name','Balanco de massa (Caso439)');
 
-                % theta_n --> T=0 e 8
-                theta_aux=theta_n(:,end);
-                theta_80=theta_aux(centro_80);
-                
-                plot(theta_80, centroY_80)
-                hold on
-                % TPFA
-                % theta_n --> 8
-                filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_TPFA_quad_distorcido_08';
-                fname = fullfile(filepath);
-                theta_n = readmatrix(fullfile(fname, 'Tables_teste_TPFA_quad_distorcido_08_1WaterContent_steptime3.txt'));
-                theta_aux=theta_n(:,end);
-                theta_80=theta_aux(centro_80);
-                plot(theta_80, centroY_80)
-                hold on
+                subplot(3,1,1)
+                semilogy(tt, mbe, '-o', 'LineWidth', 1.2); hold on
+                semilogy(tt, mrel, '-s', 'LineWidth', 1.2);
+                xlabel('Tempo'); ylabel('Erro de balanco de massa');
+                legend('|MBE| (absoluto)', 'MBE_{rel}', 'Location', 'best');
+                grid on; title('MBE global por passo de tempo');
 
-                % theta experimental x=80. t=0
-                T3=[0.313699	200-121.724
-                    0.324658	200-110.690
-                    0.121918	200-100.345
-                    0.153425	200-91.3793
-                    0.0684932	200-81.3793
-                    0.0602740	200-71.3793
-                    0.0821918	200-61.3793
-                    0.0917808	200-50.6897
-                    0.0397260	200-41.0345
-                    0.0383562	200-31.0345
-                    0.0260274	200-21.7241
-                    0.00273973	200-11.3793];
+                subplot(3,1,2)
+                plot(tt, mratio, '-d', 'LineWidth', 1.2, 'Color', [0 0.45 0.74]); hold on
+                yline(1, '--k', 'LineWidth', 1);
+                xlabel('Tempo'); ylabel('MBE_{ratio}');
+                grid on; title('Razao storage/flux (deve ficar proxima de 1)');
+                pad = max(0.02, 1.2*max(abs(mratio - 1)));
+                ylim([1-pad, 1+pad]);
 
-                plot(T3(:,1), T3(:,2),'o')
-                hold on
+                subplot(3,1,3)
+                semilogy(tt, rloc, '-^', 'LineWidth', 1.2, 'Color', [0.6 0 0]);
+                xlabel('Tempo'); ylabel('max_i |R_i|');
+                grid on; title('Pior residuo local por elemento (consistencia MPFA-D)');
 
-                % theta experimental x=80. t=8
-                T4=[0.319178	200-100.345
-                    0.321918	200-91.0345
-                    0.280822	200-81.0345
-                    0.184932	200-71.7241
-                    0.212329	200-60.6897
-                    0.215068	200-51.3793
-                    0.163014	200-41.3793
-                    0.157534	200-31.3793
-                    0.135616	200-21.0345
-                    0.135616	200-11.3793
-                    0.116438	200-3.10345];
-                plot(T4(:,1), T4(:,2),'o')
-                xlabel('Water Content')
-                ylabel('Z')
-                title('x=80')
-                grid
-
-                %% ============================================================
-                figure(5)
-                
-                cacheFile = fullfile(fileparts(fileparts(mfilename('fullpath'))), 'data', 'centro_x=140_quad.mat');
-                if isfile(cacheFile), centro_140 = load(cacheFile).centro_140;
-                else
-                 centro_140 = obj.elementos_centroide_na_caixa(elem, coord, [-Inf 200], [140 145]); 
-                 save(cacheFile, 'centro_140'); 
-                end
-                centroY_140=centelem(centro_140,2);
-
-                % MPFAD
-                filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_MPFAD_quad_08';
-                fname = fullfile(filepath);
-                theta_n = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_quad_08_1WaterContent_steptime3.txt'));
-
-                theta_aux=theta_n(:,end);
-                theta_140=theta_aux(centro_140);
-                theta_init=theta_n(:,2);
-                
-                plot(theta_140, centroY_140)
-                hold on
-                plot(theta_init(centro_140),centroY_140)
-                hold on
-                % malha quadrilateral distorcido
-                % MPFAD
-                filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_MPFAD_quad_distorcido_08';
-                fname = fullfile(filepath);
-                theta_n = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_quad_distorcido_08_1WaterContent_steptime3'));
-                theta_aux=theta_n(:,end);
-                theta_140=theta_aux(centro_140);
-                centroY_140=centelem(centro_140,2);
-                plot(theta_140, centroY_140)
-                hold on
-                % TPFA
-                filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_TPFA_quad_distorcido_08';
-                fname = fullfile(filepath);
-                theta_n = readmatrix(fullfile(fname, 'Tables_teste_TPFA_quad_distorcido_08_1WaterContent_steptime3.txt'));
-                theta_aux=theta_n(:,end);
-                theta_140=theta_aux(centro_140);
-                centroY_140=centelem(centro_140,2);
-                plot(theta_140, centroY_140)
-                hold on
-
-                % Theta experimental x=140. t=0
-                T3=[0.271622	200-121.379
-                    0.239189	200-111.379
-                    0.187838	200-101.034
-                    0.101351	200-91.3793
-                    0.0729730	200-80.3448
-                    0.0581081	200-71.3793
-                    0.0567568	200-60.3448
-                    0.0432432	200-51.0345
-                    0.0391892	200-41.0345
-                    0.0162162	200-21.7241
-                    0.0148649	200-10.6897 ];
-
-                plot(T3(:,1), T3(:,2),'o')
-                hold on
-                % theta experimental x=140. t=8
-                T4=[0.278378	200-112.069
-                    0.314865	200-101.379
-                    0.275676	200-91.0345
-                    0.259459	200-81.0345
-                    0.228378	200-71.3793
-                    0.117568	200-60.3448
-                    0.0743243	200-51.0345
-                    0.0527027	200-41.3793
-                    0.0432432	200-31.7241
-                    0.0135135	200-21.7241];
-                plot(T4(:,1), T4(:,2),'o')
-
-                title('x=140')
-                grid
-
-                %% =============================================================
-                
-                filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_MPFAD_quad_08';
-                fname = fullfile(filepath);
-                h_n = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_quad_08_1h_steptime3.txt'));
-                time2= readmatrix(fullfile(fname, 'Tables_teste_MPFAD_quad_08_1time_step3.txt'));
-                h_n(:, 1:2:end) = [];
-                
-               cacheFile = fullfile(fileparts(fileparts(mfilename('fullpath'))), 'data', 'centros_6pontos_quadrilateral.mat');
-
-                if isfile(cacheFile)
-                    S = load(cacheFile);
-                    centro1 = S.centro1; centro2 = S.centro2; centro3 = S.centro3;
-                    centro4 = S.centro4; centro5 = S.centro5; centro6 = S.centro6;
-                else
-                    centro1 = obj.elemento_no_ponto(elem, coord, 12.5, 107.5);
-                    centro2 = obj.elemento_no_ponto(elem, coord, 12.5, 132.5);
-                    centro3 = obj.elemento_no_ponto(elem, coord, 12.5, 187.5);
-                    centro4 = obj.elemento_no_ponto(elem, coord, 162.5, 82.5);
-                    centro5 = obj.elemento_no_ponto(elem, coord, 162.5, 117.5);
-                    centro6 = obj.elemento_no_ponto(elem, coord, 162.5, 157.5);
-                    save(cacheFile, 'centro1', 'centro2', 'centro3', 'centro4', 'centro5', 'centro6');
-                end
-
-                h_time1 = h_n(centro1,:);  
-                h_time2 = h_n(centro2,:);  
-                h_time3 = h_n(centro3,:);  
-                h_time4 = h_n(centro4,:);  
-                h_time5 = h_n(centro5,:);  
-                h_time6 = h_n(centro6,:);    
-               %===========================================================
-               % malha quadrilateral distorcido
-               % MPFA-D
-               filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_MPFAD_quad_distorcido_08';
-                fname = fullfile(filepath);
-                h_n = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_quad_distorcido_08_1h_steptime3.txt'));
-                h_n_MPFAD=h_n;
-                h_n_MPFAD(:, 1:2:end) = [];
-                 h_time1_M=h_n_MPFAD(centro1,:);
-                 h_time2_M=h_n_MPFAD(centro2,:);
-                 h_time3_M=h_n_MPFAD(centro3,:);
-                 h_time4_M=h_n_MPFAD(centro4,:);
-                 h_time5_M=h_n_MPFAD(centro5,:);
-                 h_time6_M=h_n_MPFAD(centro6,:);
-                % TPFA 
-                 filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_TPFA_quad_distorcido_08';
-                fname = fullfile(filepath);
-                h_n = readmatrix(fullfile(fname, 'Tables_teste_TPFA_quad_distorcido_08_1h_steptime3.txt'));
-                h_n_TPFA=h_n;
-                h_n_TPFA(:, 1:2:end) = [];
-                h_time1_T=h_n_TPFA(centro1,:);
-                h_time2_T=h_n_TPFA(centro2,:);
-                h_time3_T=h_n_TPFA(centro3,:);
-                h_time4_T=h_n_TPFA(centro4,:);
-                h_time5_T=h_n_TPFA(centro5,:);
-                h_time6_T=h_n_TPFA(centro6,:);
-                figure(6)
-                plot(time2,h_time1)
-                plot(time2,h_time1_M)
-                plot(time2,h_time1_T)
-                hold on
-                plot(time2,h_time2)
-                plot(time2,h_time2_M)
-                plot(time2,h_time2_T)
-                hold on
-                plot(time2,h_time3)
-                plot(time2,h_time3_M)
-                plot(time2,h_time3_T)
-                xlabel('Time')
-                ylabel('Water content ')
-                title('x=11')
-                grid
-
-                figure(7)
-                plot(time2,h_time4)
-                plot(time2,h_time4_M)
-                plot(time2,h_time4_T)
-                hold on
-                plot(time2,h_time5)
-                plot(time2,h_time5_M)
-                plot(time2,h_time5_T)
-                hold on
-                plot(time2,h_time6)
-                plot(time2,h_time6_M)
-                plot(time2,h_time6_T)
-
-                xlabel('Time')
-                ylabel('Water Pressure ')
-                title('x=161')
-                grid
-               
-                %% ============================================================
-            else
-                figure(3)
-                % Malha triangular
-                % x=20
-                cacheFile = fullfile(fileparts(fileparts(mfilename('fullpath'))), 'data', 'centro_x=20_tri.mat');
-                if isfile(cacheFile), centro = load(cacheFile).centro;
-                else
-                 centro = obj.elementos_centroide_na_caixa(elem, coord, [-Inf 200], [20 25]); 
-                 save(cacheFile, 'centro'); 
-                end
-
-                filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_MPFAD_tri_08';
-                fname = fullfile(filepath);
-                theta_n = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_tri_08_1WaterContent_steptime3.txt'));
-                centelem_aux = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_tri_08_1centrocell3.txt'));
-                centroY=centelem_aux(centro,2);
-                
-                % MPFA-D
-                theta_aux=theta_n(:,end);
-                theta_init=theta_n(:,2);
-                theta=theta_aux(centro);
-                % theta_n --> T=0
-                plot(theta_init(centro),centroY)
-                hold on
-                % theta_n --> T=8
-                plot(theta, centroY)
-                hold on
-                
-                % TPFA
-                filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_TPFA_tri_08';
-                fname = fullfile(filepath);
-                theta_n_T = readmatrix(fullfile(fname, 'Tables_teste_TPFA_tri_08_1WaterContent_steptime3.txt'));
-                % theta_n --> T=8
-                theta_aux_T=theta_n_T(:,end);
-                theta_T=theta_aux_T(centro);
-                plot(theta_T, centroY)
-                hold on
-                % Malha triangular distorcido
-                % MPFA D
-                filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_MPFAD_tri_distorcido_08';
-                fname = fullfile(filepath);
-                theta_n_M = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_tri_distorcido_08_1WaterContent_steptime3.txt'));
-                % theta_n --> T=8
-                theta_aux_M=theta_n_M(:,end);
-                theta_M=theta_aux_M(centro);
-
-                plot(theta_M, centroY)
-                hold on
-                % TPFA
-                % theta_n --> T=8
-                filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_TPFA_tri_distorcido_08';
-                fname = fullfile(filepath);
-                theta_n_TP = readmatrix(fullfile(fname, 'Tables_teste_TPFA_tri_distorcido_08_1WaterContent_steptime3.txt'));
-                theta_aux=theta_n_TP(:,end);
-                theta_TP=theta_aux(centro);
-
-                plot(theta_TP, centroY)
-                legend('Initially solution','MPFA-D: triangle','TPFA: triangle','MPFA-D: distorted triangle','TPFA: distorted triangle')
-
-                hold on
-
-                % theta experimental TEMPO=0
-                T1=[0.309198	200-130.634
-                    0.304946	200-121.653
-                    0.319766	200-111.612
-                    0.143656	200-100.410
-                    0.142113	200-90.3880
-                    0.0642259	200-81.4914
-                    0.0558460	200-70.4409
-                    0.0406789	200-61.1264
-                    0.0473110	200-50.7499
-                    0.0307680	200-40.7457
-                    0.0156071	200-31.7768
-                    0.00315489	200-21.7679
-                    0.00980558	200-12.4283
-                    ];
-                plot(T1(:,1), T1(:,2),'o')
-                hold on
-
-                % theta experimental TEMPO= 8
-                T2=[0.319091	200-100.900
-                    0.301364	200-90.9002
-                    0.283636	200-80.8976
-                    0.271364	200-70.8871
-                    0.271364	200-60.8625
-                    0.253636	200-50.8693
-                    0.249545	200-40.1613
-                    0.250909	200-31.5192
-                    0.250909	200-21.4883
-                    0.253636	200-12.1518];
-
-                plot(T2(:,1), T2(:,2),'o')
-                xlabel('Water Content')
-                ylabel('Z')
-                title('x=21')
-                grid
-                %% ============================================================
-                figure(4)
-                % x=80
-              
-                cacheFile = fullfile(fileparts(fileparts(mfilename('fullpath'))), 'data', 'centro_x=80_tri.mat');
-                if isfile(cacheFile), centro_80 = load(cacheFile).centro_80;
-                else
-                 centro_80 = obj.elementos_centroide_na_caixa(elem, coord, [-Inf 200], [80 85]); 
-                 save(cacheFile, 'centro_80'); 
-                end
-
-
-                filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_MPFAD_tri_08';
-                fname = fullfile(filepath);
-                theta_n = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_tri_08_1WaterContent_steptime3.txt'));
-                centelem = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_tri_08_1centrocell3.txt'));
-                centroY_80=centelem(centro_80,2);
-                % MPFA-D
-                % theta_n --> T=0 e 8
-                theta_aux=theta_n(:,end);
-                theta_init=theta_n(:,2);
-                theta_80=theta_aux(centro_80);
-                plot(theta_80, centroY_80)
-                
-                hold on
-                plot(theta_init(centro_80),centroY_80)
-                
-                hold on
-                % TPFA
-
-                filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_TPFA_tri_08';
-                fname = fullfile(filepath);
-                theta_n = readmatrix(fullfile(fname, 'Tables_teste_TPFA_tri_08_1WaterContent_steptime3.txt'));
-                % MPFA-D
-                % theta_n --> T=0 e 8
-                theta_aux=theta_n(:,end);
-                theta_80=theta_aux(centro_80);
-                plot(theta_80, centroY_80)
-               
-                hold on
-
-                % malha triangular distorcido
-                % MPFAD
-                filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_MPFAD_tri_distorcido_08';
-                fname = fullfile(filepath);
-                theta_n = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_tri_distorcido_08_1WaterContent_steptime3.txt'));
-
-                % theta_n --> T=0 e 8
-                theta_aux=theta_n(:,end);
-                theta_80=theta_aux(centro_80);
-                plot(theta_80, centroY_80)
-                
-                hold on
-                % TPFA
-                % theta_n --> 8
-                filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_TPFA_tri_distorcido_08';
-                fname = fullfile(filepath);
-                theta_n = readmatrix(fullfile(fname, 'Tables_teste_TPFA_tri_distorcido_08_1WaterContent_steptime3.txt'));
-                theta_aux=theta_n(:,end);
-                theta_80=theta_aux(centro_80);
-                plot(theta_80, centroY_80)
-                legend('MPFA-D: triangle','Initially solution','TPFA: triangle','MPFA-D: distorted triangle','TPFA: distorted triangle')
-                hold on
-
-                % theta experimental x=80. t=0
-                T3=[0.313699	200-121.724
-                    0.324658	200-110.690
-                    0.121918	200-100.345
-                    0.153425	200-91.3793
-                    0.0684932	200-81.3793
-                    0.0602740	200-71.3793
-                    0.0821918	200-61.3793
-                    0.0917808	200-50.6897
-                    0.0397260	200-41.0345
-                    0.0383562	200-31.0345
-                    0.0260274	200-21.7241
-                    0.00273973	200-11.3793];
-
-                plot(T3(:,1), T3(:,2),'o')
-                hold on
-
-                % theta experimental x=80. t=8
-                T4=[0.319178	200-100.345
-                    0.321918	200-91.0345
-                    0.280822	200-81.0345
-                    0.184932	200-71.7241
-                    0.212329	200-60.6897
-                    0.215068	200-51.3793
-                    0.163014	200-41.3793
-                    0.157534	200-31.3793
-                    0.135616	200-21.0345
-                    0.135616	200-11.3793
-                    0.116438	200-3.10345];
-                plot(T4(:,1), T4(:,2),'o')
-                legend('MPFA-D: tri', 'TPFA:tri','MPFA-D: distorted tri', 'TPFA: distorted tri')
-                xlabel('Water Content')
-                ylabel('Z')
-                title('x=80')
-                grid
-                %% ============================================================
-                % X=140
-                figure(5)
-
-                cacheFile = fullfile(fileparts(fileparts(mfilename('fullpath'))), 'data', 'centro_x=140_tri.mat');
-                if isfile(cacheFile), centro_140 = load(cacheFile).centro_140;
-                else
-                 centro_140 = obj.elementos_centroide_na_caixa(elem, coord, [-Inf 200], [140 145]); 
-                 save(cacheFile, 'centro_140'); 
-                end
-
-                % malha triangular
-                % MPFAD
-                filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_MPFAD_tri_08';
-                fname = fullfile(filepath);
-                theta_n = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_tri_08_1WaterContent_steptime3.txt'));
-                centelem = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_tri_08_1centrocell3.txt'));
-                centroY_140=centelem(centro_140,2);
-
-                theta_aux=theta_n(:,end);
-                theta_140=theta_aux(centro_140);
-                theta_init=theta_n(:,2);
-                plot(theta_140, centroY_140)
-                hold on
-                plot(theta_init(centro_140),centroY_140)
-                hold on
-                % TPFA
-                filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_TPFA_tri_08';
-                fname = fullfile(filepath);
-                theta_n = readmatrix(fullfile(fname, 'Tables_teste_TPFA_tri_08_1WaterContent_steptime3.txt'));
-                theta_aux=theta_n(:,end);
-                theta_140=theta_aux(centro_140);
-                plot(theta_140, centroY_140)
-                hold on
-                % malha triangular distorcido
-                % MPFAD
-                filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_MPFAD_tri_distorcido_08';
-                fname = fullfile(filepath);
-                theta_n = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_tri_distorcido_08_1WaterContent_steptime3'));
-                theta_aux=theta_n(:,end);
-                theta_140=theta_aux(centro_140);
-                plot(theta_140, centroY_140)
-                hold on
-                % TPFA
-                filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_TPFA_tri_distorcido_08';
-                fname = fullfile(filepath);
-                theta_n = readmatrix(fullfile(fname, 'Tables_teste_TPFA_tri_distorcido_08_1WaterContent_steptime3.txt'));
-                theta_aux=theta_n(:,end);
-                theta_140=theta_aux(centro_140);
-                plot(theta_140, centroY_140)
-                hold on
-
-                % Theta experimental x=140. t=0
-                T3=[0.271622	200-121.379
-                    0.239189	200-111.379
-                    0.187838	200-101.034
-                    0.101351	200-91.3793
-                    0.0729730	200-80.3448
-                    0.0581081	200-71.3793
-                    0.0567568	200-60.3448
-                    0.0432432	200-51.0345
-                    0.0391892	200-41.0345
-                    0.0162162	200-21.7241
-                    0.0148649	200-10.6897 ];
-
-                plot(T3(:,1), T3(:,2),'o')
-                hold on
-                % theta experimental x=140. t=8
-                T4=[0.278378	200-112.069
-                    0.314865	200-101.379
-                    0.275676	200-91.0345
-                    0.259459	200-81.0345
-                    0.228378	200-71.3793
-                    0.117568	200-60.3448
-                    0.0743243	200-51.0345
-                    0.0527027	200-41.3793
-                    0.0432432	200-31.7241
-                    0.0135135	200-21.7241];
-                plot(T4(:,1), T4(:,2),'o')
-                xlabel(' Water content')
-                ylabel('Z')
-                title('x=140')
-                legend('MPFA-D: tri', 'TPFA:tri','MPFA-D: distorted tri', 'TPFA: distorted tri')
-
-                grid
-                %%=============================================================
-                %% =============================================================
-                % malha triangular
-                % MPFAD
-                filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_MPFAD_tri_08';
-                fname = fullfile(filepath);
-                h_n = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_tri_08_1h_steptime3.txt'));
-                time2= readmatrix(fullfile(fname, 'Tables_teste_MPFAD_tri_08_1time_step3.txt'));
-                h_n_M=h_n;
-                h_n_M(:, 1:2:end) = [];
-                % TPFA
-                filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_TPFA_tri_08';
-                fname = fullfile(filepath);
-                h_n = readmatrix(fullfile(fname, 'Tables_teste_TPFA_tri_08_1h_steptime3.txt'));
-                h_n_T=h_n;
-                h_n_T(:, 1:2:end) = [];
-
-                cacheFile = fullfile(fileparts(fileparts(mfilename('fullpath'))), 'data', 'centros_6pontos_tri.mat');
-
-                if isfile(cacheFile)
-                    S = load(cacheFile);
-                    centro1 = S.centro1; centro2 = S.centro2; centro3 = S.centro3;
-                    centro4 = S.centro4; centro5 = S.centro5; centro6 = S.centro6;
-                else
-                    centro1 = obj.elemento_no_ponto(elem, coord, 12.5, 107.5);
-                    centro2 = obj.elemento_no_ponto(elem, coord, 12.5, 132.5);
-                    centro3 = obj.elemento_no_ponto(elem, coord, 12.5, 187.5);
-                    centro4 = obj.elemento_no_ponto(elem, coord, 162.5, 82.5);
-                    centro5 = obj.elemento_no_ponto(elem, coord, 162.5, 117.5);
-                    centro6 = obj.elemento_no_ponto(elem, coord, 162.5, 157.5);
-                    save(cacheFile, 'centro1', 'centro2', 'centro3', 'centro4', 'centro5', 'centro6');
-                end
-
-                h_time1_M = h_n_M(centro1,:);  h_time1_T = h_n_T(centro1,:);
-                h_time2_M = h_n_M(centro2,:);  h_time2_T = h_n_T(centro2,:);
-                h_time3_M = h_n_M(centro3,:);  h_time3_T = h_n_T(centro3,:);
-                h_time4_M = h_n_M(centro4,:);  h_time4_T = h_n_T(centro4,:);
-                h_time5_M = h_n_M(centro5,:);  h_time5_T = h_n_T(centro5,:);
-                h_time6_M = h_n_M(centro6,:);  h_time6_T = h_n_T(centro6,:);   
-               %===========================================================
-               % malha triangular distorcido
-               % MPFA-D
-               filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_MPFAD_tri_distorcido_08';
-                fname = fullfile(filepath);
-                h_n = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_tri_distorcido_08_1h_steptime3.txt'));
-                h_n_MPFAD=h_n;
-                h_n_MPFAD(:, 1:2:end) = [];
-                 h_time1_MTD=h_n_MPFAD(centro1,:);
-                 h_time2_MTD=h_n_MPFAD(centro2,:);
-                 h_time3_MTD=h_n_MPFAD(centro3,:);
-                 h_time4_MTD=h_n_MPFAD(centro4,:);
-                 h_time5_MTD=h_n_MPFAD(centro5,:);
-                 h_time6_MTD=h_n_MPFAD(centro6,:);
-                % TPFA 
-                 filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_TPFA_tri_distorcido_08';
-                fname = fullfile(filepath);
-                h_n = readmatrix(fullfile(fname, 'Tables_teste_TPFA_tri_distorcido_08_1h_steptime3.txt'));
-                h_n_TPFA=h_n;
-                h_n_TPFA(:, 1:2:end) = [];
-                h_time1_TTD=h_n_TPFA(centro1,:);
-                h_time2_TTD=h_n_TPFA(centro2,:);
-                h_time3_TTD=h_n_TPFA(centro3,:);
-                h_time4_TTD=h_n_TPFA(centro4,:);
-                h_time5_TTD=h_n_TPFA(centro5,:);
-                h_time6_TTD=h_n_TPFA(centro6,:);
-                figure(6)
-                plot(time2,h_time1_M)
-                 plot(time2,h_time1_T)
-                plot(time2,h_time1_MTD)
-                plot(time2,h_time1_TTD)
-                hold on
-                plot(time2,h_time2_M)
-                plot(time2,h_time2_T)
-                plot(time2,h_time2_MTD)
-                plot(time2,h_time2_TTD)
-                hold on
-                plot(time2,h_time3_M)
-                plot(time2,h_time3_T)
-                plot(time2,h_time3_MTD)
-                plot(time2,h_time3_TTD)
-
-                legend('MPFA-D: tri', 'TPFA:tri','MPFA-D: distorted tri', 'TPFA: distorted tri')
-
-                xlabel('Time')
-                ylabel('Water content ')
-                title('x=11')
-                grid
-
-                figure(7)
-                plot(time2,h_time4_M)
-                plot(time2,h_time4_T)
-                plot(time2,h_time4_MTD)
-                plot(time2,h_time4_TTD)
-                hold on
-                plot(time2,h_time5_M)
-                plot(time2,h_time5_T)
-                plot(time2,h_time5_MTD)
-                plot(time2,h_time5_TTD)
-                hold on
-                plot(time2,h_time6_M)
-                plot(time2,h_time6_T)
-                plot(time2,h_time6_MTD)
-                plot(time2,h_time6_TTD)
-
-                xlabel('Time')
-                ylabel('Water Pressure ')
-                title('x=161')
-                grid
+                % ── salva a figura (mesma pasta/prefixo das tabelas) ──────
+                filepath  = env.mainpathfolders.path;
+                tabfolder = env.mainpathfolders.tabfolder;
+                fname     = fullfile(filepath, tabfolder);
+                savefig(gcf,  [fname 'MBE_figure.fig']);
+                saveas(gcf,   [fname 'MBE_figure.png']);
             end
+
+%=========================================================================
+% % quadrilatero
+% figure(1)
+% % tempo=2
+% % MPFA-D e TPFA ortogonal
+% A1=[300.0  65.0;
+%     100.0  70.0656;
+%     28.9426 78.4877];
+% plot(A1(:,1), A1(:,2),'o')
+% hold on
+% % MPFA-D distorcido
+% C1=[0	81.8198
+%     13.8135	81.1523
+%     27.8174	80.4857
+%     40.0743	78.4163
+%     65.6374	74.6297
+%     98.1984	72.2581
+%     144.064	68.8685
+%     187.473	68.2704
+%     300	65];
+% plot(C1(:,1), C1(:,2))
+% hold on
+% % TPFA distorcido
+% C2=[0	82.7826
+%     25.8440	81.3913
+%     51.6880	77.5652
+%     84.1676	73.7391
+%     148.079	68.8696
+%     207.101	67.4783
+%     300.000	65.0   ];
+% plot(C2(:,1), C2(:,2))
+% hold on
+% B1=[0	80
+%     5.93714	79.9302
+%     11.5250	79.9302
+%     17.4622	79.5812
+%     22.7008	78.8831
+%     27.9395	78.5340
+%     35.2736	77.4869
+%     42.2584	76.4398
+%     49.5925	75.7417
+%     58.3236	74.3456
+%     65.6577	73.2984
+%     76.1350	71.9023
+%     100.233	69.4590
+%     112.806	68.0628
+%     129.220	67.0157
+%     139.697	65.9686
+%     150.524	65
+%     300.000	65 ];
+% plot(B1(:,1), B1(:,2),'-')
+% hold on
+% % tempo=3
+% % MPFA-D e TPFA
+% A2=[300	65
+%     161.698	75.5158
+%     70.00	91.5765
+%     2.28041	    100];
+% plot(A2(:,1), A2(:,2),'o')
+% hold on
+% % MPFA-D quadrilatero distorcido
+% C3=[0	101.903
+%     14.5254	101.099
+%     34.8427	98.6191
+%     59.8216	93.6154
+%     84.7992	89.0345
+%     111.045	84.8801
+%     151.683	78.6520
+%     202.473	73.7211
+%     300.0	65.0];
+% plot(C3(:,1), C3(:,2))
+% hold on
+% % TPFA quadrilatero distorcido
+% C4=[0.0	100.524
+%     24.7094	99.1565
+%     53.0363	94.6519
+%     85.5607	88.7560
+%     129.974	81.8269
+%     205.859	73.1891
+%     300.0	65.0 ];
+% plot(C4(:,1), C4(:,2))
+% hold on
+%
+% B2=[0	100
+%     11.0337	99.9812
+%     23.5784	99.3283
+%     33.3361	97.9411
+%     46.2305	95.8582
+%     57.0343	93.7729
+%     68.8838	91.3391
+%     80.0365	88.9046
+%     91.5371	86.8201
+%     104.780	84.3880
+%     123.599	81.6127
+%     142.765	79.1875
+%     164.371	76.0
+%     196.779	73.3064
+%     228.141	70.5457
+%     266.473	67.0939
+%     300	65.0];
+% plot(B2(:,1), B2(:,2),'-')
+% hold on
+% % tempo=4
+% % MPFA-D e TPFA quad ortogonal
+% A3=[300	65
+%     161.698	82.5585
+%     129.780	89.98
+%     70.00	101.622
+%     2.28041	110];
+% plot(A3(:,1), A3(:,2),'o')
+% hold on
+% % MPFA-D quad distorcido
+%
+% C4=[0.0	109.185
+%     22.3412	108.202
+%     45.3857	104.159
+%     61.2612	101.125
+%     82.2579	97.0789
+%     112.474	90.4977
+%     159.584	83.9451
+%     200.038	77.8914
+%     245.610	72.8669
+%     300.0	65.0 ];
+% plot(C4(:,1), C4(:,2),'o')
+% hold on
+% % TPFA quad distorcido
+% C5=[0.0	108.668
+%     23.2068	107.400
+%     42.1941	104.440
+%     61.1814	99.7886
+%     90.2954	95.5603
+%     131.224	88.3721
+%     176.793	80.7611
+%     241.350	73.1501
+%     300.00	65.0];
+% plot(C5(:,1), C5(:,2))
+% hold on
+%
+% B3=[0	110
+%     9.28058	109.610
+%     19.3859	108.923
+%     28.0979	107.886
+%     39.2497	106.154
+%     53.1902	103.378
+%     67.1311	100.253
+%     82.4658	97.1292
+%     95.7094	94.3523
+%     112.438	90.8814
+%     126.378	88.8034
+%     146.242	85.6851
+%     183.879	80.4933
+%     233.364	73.9191
+%     300	65];
+% plot(B3(:,1), B3(:,2),'-')
+% hold on
+% % tempo=8
+% % MPFA-D e TPFA quad ortogonal
+% A4=[300	65
+%     161.698	95.2342
+%     129.780	102.227
+%     70.0	114.354
+%     36.6371	119.324
+%     11.6036	119.705
+%     2.28041	120];
+% plot(A4(:,1), A4(:,2),'o')
+% hold on
+% % MPFA-D  quad distorcido
+% C6=[0.0	120.676
+%     18.4741	120.281
+%     36.2736	118.196
+%     53.6513	114.845
+%     79.0833	108.973
+%     119.348	101.435
+%     158.766	93.8956
+%     188.859	87.6088
+%     265.576	72.5268
+%     300.0	65.0];
+% plot(C6(:,1), C6(:,2))
+% hold on
+% % TPFA  quad distorcido
+% C7=[0.0	118.395
+%     20.5957	118.001
+%     43.4824	114.227
+%     74.8466	108.352
+%     114.688	100.797
+%     167.668	91.1465
+%     249.468	76.4625
+%     300.0	65.00];
+% plot(C7(:,1), C7(:,2))
+% hold on
+%
+% B4=[0.697674	120
+%     9.41860	119.930
+%     36.2791	118.531
+%     72.9070	110.839
+%     103.953	103.497
+%     134.302	97.2028
+%     162.907	91.6084
+%     215.930	81.8182
+%     257.093	73.4266
+%     300.000	65];
+%
+% plot(B4(:,1), B4(:,2),'-')
+%
+% xlabel('Aquifer Lenght')
+% ylabel('Z')
+% grid
+%
+%
+% %% triangulo
+% figure(2)
+% % tempo=2
+% % experimental
+% A1=[300.0  65.0;
+%     100.0  70.0656;
+%     28.9426 78.4877];
+% plot(A1(:,1), A1(:,2),'o')
+% hold on
+% % MPFA-D tri
+% C1=[0.0	83.7209
+%     14.9059	83.2773
+%     35.1840	80.7117
+%     59.2637	77.2951
+%     94.3281	73.0173
+%     170.378	68.6818
+%     300.0	65.0];
+% plot(C1(:,1), C1(:,2))
+% hold on
+% % TPFA tri
+% C2=[0.0	70.1571
+%     10.4895	69.1099
+%     41.9580	69.4590
+%     103.147	68.0628
+%     154.895	66.3176
+%     242.308	65.0
+%     300.000	65.0
+%     ];
+% plot(C2(:,1), C2(:,2))
+% hold on
+% % MPFAD tri distorcido
+% B1=[0.0 	83.3005
+%     40.8202	79.1879
+%     90.3452	72.5621
+%     177.524	67.7338
+%     300.0	65.0 ];
+% plot(B1(:,1), B1(:,2),'-')
+% hold on
+% % TPFA tri distorcido
+% W1=[0.0	71.2058
+%     36.8553	70.9413
+%     74.9243	70.3318
+%     135.350	67.6801
+%     214.981	66.1201
+%     300.0	65.0];
+% plot(W1(:,1), W1(:,2))
+% hold on
+% %--------------------------------------------------------------
+% % tempo=3
+% % experimental
+% A2=[300	65
+%     161.698	75.5158
+%     70.00	91.5765
+%     2.28041	    100];
+% plot(A2(:,1), A2(:,2),'o')
+% hold on
+% % MPFAD  tri
+% C3=[0.0	104.001
+%     16.8049	101.918
+%     34.6039	100.259
+%     49.8616	97.7541
+%     71.4790	92.7318
+%     96.4861	87.7142
+%     133.358	82.2922
+%     168.110	77.7094
+%     213.032	73.1409
+%     300.00	65.00      ];
+% plot(C3(:,1), C3(:,2))
+% hold on
+% % TPFA tri
+% C4=[0.00000	92.6829
+%     11.1758	92.3345
+%     39.8137	92.6829
+%     61.8161	91.2892
+%     87.3108	88.1533
+%     122.584	82.9268
+%     163.097	77.0035
+%     232.247	70.3833
+%     300.00	65.00 ];
+% plot(C4(:,1), C4(:,2))
+% hold on
+% % MPFA-D tri distocido
+% B2=[0.00	103.832
+%     29.1552	101.328
+%     74.0825	92.5125
+%     115.180	85.0999
+%     176.834	76.9427
+%     239.885	70.5244
+%     300.00	65.00   ];
+% plot(B2(:,1), B2(:,2),'-')
+% hold on
+% % TPFA tri distorcido
+% W1=[0.241752	92.1743
+%     33.3812	92.2127
+%     55.0095	91.8900
+%     80.4774	89.4847
+%     110.134	84.6495
+%     152.699	78.7858
+%     205.032	72.9335
+%     300.273	65.0439];
+% plot(W1(:,1), W1(:,2))
+% hold on
+% %--------------------------------------------------------------
+% % tempo=4
+% % experimental
+% A3=[300	65
+%     161.698	82.5585
+%     129.780	89.98
+%     70.00	101.622
+%     2.28041	110];
+% plot(A3(:,1), A3(:,2),'o')
+% hold on
+% % MPFA-D tri
+%
+% C4=[0.00	112.237
+%     9.93192	111.527
+%     21.1325	110.465
+%     34.0831	109.051
+%     51.5823	105.884
+%     68.0305	102.019
+%     96.0282	96.0421
+%     121.227	91.1176
+%     154.475	85.1348
+%     199.625	78.7884
+%     300.00	65.00];
+% plot(C4(:,1), C4(:,2))
+% hold on
+% % TPFA tri
+% C5=[0.00000	101.571
+%     8.03260	100.524
+%     33.5274	101.222
+%     52.7357	100.175
+%     85.9139	96.3351
+%     105.122	92.4956
+%     131.665	87.9581
+%     161.001	83.4206
+%     300.00	65.00  ];
+% plot(C5(:,1), C5(:,2))
+% hold on
+% % MPFAD tri distorcido
+% B3=[0.00000	112.391
+%     18.5315	111.344
+%     33.5664	109.599
+%     58.0420	103.316
+%     93.0070	96.6841
+%     128.322	90.4014
+%     176.573	83.0716
+%     227.622	74.6946
+%     300.00	65.00
+%     ];
+% plot(B3(:,1), B3(:,2))
+% hold on
+% % TPFA tri distorcido
+% W1=[0.00	101.394
+%     34.1860	100.000
+%     71.1628	97.2125
+%     104.651	92.3345
+%     151.395	84.6690
+%     202.326	77.3519
+%     258.488	70.3833
+%     300.00	65.00
+%     ];
+% plot(W1(:,1), W1(:,2))
+% hold on
+% % tempo=8
+% % experimental
+% A4=[300	65
+%     161.698	95.2342
+%     129.780	102.227
+%     70.0	114.354
+%     36.6371	119.324
+%     11.6036	119.705
+%     2.28041	120];
+% plot(A4(:,1), A4(:,2),'o')
+% hold on
+% % MPFA-D  tri
+% C6=[0.00	124.297
+%     19.9319	122.762
+%     39.3526	119.693
+%     63.8842	114.066
+%     95.0596	107.417
+%     137.479	98.7212
+%     194.208	87.9795
+%     300.00	65.00];
+% plot(C6(:,1), C6(:,2))
+% hold on
+% % TPFA  tri
+% W1=[0.920582	110.491
+%     11.7605	109.804
+%     44.6276	109.842
+%     61.0616	109.512
+%     78.1977	106.734
+%     99.8809	102.564
+%     146.394	93.8769
+%     249.214	74.7659
+%     300.974	65.0361
+%     ];
+% plot(W1(:,1), W1(:,2))
+% hold on
+% % MPFAD tri distorcido
+% Z1=[0.00	122.996
+%     0.494247	122.996
+%     25.3463	121.225
+%     48.7957	117.365
+%     79.2422	110.012
+%     130.689	100.196
+%     166.386	92.1410
+%     220.982	81.6246
+%     300.00	65.00];
+% plot(Z1(:,1), Z1(:,2))
+% hold on
+% % TPFA tri distorcido
+% Z2=[0.00	108.902
+%     37.2862	108.247
+%     67.7074	106.886
+%     83.7937	104.810
+%     102.679	101.342
+%     129.259	95.7881
+%     157.587	90.5855
+%     204.100	82.2626
+%     300.00	65.00];
+%
+% plot(Z2(:,1), Z2(:,2))
+%
+% hold on
+% xlabel('Aquifer Lenght')
+% ylabel('Z')
+% grid
+%
+%
+%
+% %% --------------------------------------------------------------------------
+% if max(max(elem(:,4)))~=0
+%     figure(3)
+%
+%     % Malha quadrilateral ortogonal
+%     %centro = obj.elementos_centroide_na_caixa(elem, coord, [-Inf 200], [20 25]);
+%     cacheFile = fullfile(fileparts(fileparts(mfilename('fullpath'))), 'data', 'centro_x=20_quad.mat');
+%     if isfile(cacheFile), centro = load(cacheFile).centro;
+%     else
+%      centro = obj.elementos_centroide_na_caixa(elem, coord, [-Inf 200], [20 25]);
+%      save(cacheFile, 'centro');
+%     end
+%     filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_MPFAD_quad_08';
+%     fname = fullfile(filepath);
+%     theta_n = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_quad_08_1WaterContent_steptime3.txt'));
+%     centelem = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_quad_08_1centrocell3.txt'));
+%     centroY=centelem(centro,2);
+%     % MPFA-D
+%     % theta_n --> T=8
+%     theta_aux=theta_n(:,end);
+%     theta_init=theta_n(:,2);
+%     theta=theta_aux(centro);
+%
+%     plot(theta, centroY)
+%     hold on
+%     % theta_n --> T=0
+%     plot(theta_init(centro),centroY)
+%     hold on
+%
+%     % Malha quadrilateral distorcido
+%     % MPFA D
+%     filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_MPFAD_quad_distorcido_08';
+%     fname = fullfile(filepath);
+%     theta_n = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_quad_distorcido_08_1WaterContent_steptime3.txt'));
+%     % MPFA-D
+%     % theta_n --> T=8
+%     theta_aux=theta_n(:,end);
+%
+%     theta=theta_aux(centro);
+%
+%     plot(theta, centroY)
+%     hold on
+%     % TPFA
+%     % theta_n --> T=8
+%     filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_TPFA_quad_distorcido_08';
+%     fname = fullfile(filepath);
+%     theta_n = readmatrix(fullfile(fname, 'Tables_teste_TPFA_quad_distorcido_08_1WaterContent_steptime3.txt'));
+%     theta_aux=theta_n(:,end);
+%
+%     theta=theta_aux(centro);
+%
+%     plot(theta, centroY)
+%     hold on
+%
+%     % theta experimental TEMPO=0
+%     T1=[0.309198	200-130.634
+%         0.304946	200-121.653
+%         0.319766	200-111.612
+%         0.143656	200-100.410
+%         0.142113	200-90.3880
+%         0.0642259	200-81.4914
+%         0.0558460	200-70.4409
+%         0.0406789	200-61.1264
+%         0.0473110	200-50.7499
+%         0.0307680	200-40.7457
+%         0.0156071	200-31.7768
+%         0.00315489	200-21.7679
+%         0.00980558	200-12.4283
+%         ];
+%     plot(T1(:,1), T1(:,2),'o')
+%     hold on
+%
+%     % theta experimental TEMPO= 8
+%    T2=[0.319091	200-100.900
+%         0.301364	200-90.9002
+%         0.283636	200-80.8976
+%         0.271364	200-70.8871
+%         0.271364	200-60.8625
+%         0.253636	200-50.8693
+%         0.249545	200-40.1613
+%         0.250909	200-31.5192
+%         0.250909	200-21.4883
+%         0.253636	200-12.1518];
+%
+%     plot(T2(:,1), T2(:,2),'o')
+%     xlabel('Water Content')
+%     ylabel('Z')
+%     title('x=21')
+%     grid
+%     %% ============================================================
+%     % x=80
+%     figure(4)
+%
+%     cacheFile = fullfile(fileparts(fileparts(mfilename('fullpath'))), 'data', 'centro_x=80_quad.mat');
+%     if isfile(cacheFile), centro_80 = load(cacheFile).centro_80;
+%     else
+%      centro_80 = obj.elementos_centroide_na_caixa(elem, coord, [-Inf 200], [80 85]);
+%      save(cacheFile, 'centro_80');
+%     end
+%
+%     filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_MPFAD_quad_08';
+%     fname = fullfile(filepath);
+%     theta_n = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_quad_08_1WaterContent_steptime3.txt'));
+%     centelem = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_quad_08_1centrocell3.txt'));
+%     centroY_80=centelem(centro_80,2);
+%     % MPFA-D
+%     % theta_n --> T=0 e 8
+%     theta_aux=theta_n(:,end);
+%     theta_init=theta_n(:,2);
+%     theta_80=theta_aux(centro_80);
+%
+%     plot(theta_80, centroY_80)
+%     hold on
+%     plot(theta_init(centro_80),centroY_80)
+%     hold on
+%     % malha quadrilateral distorcido
+%     % MPFAD
+%     filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_MPFAD_quad_distorcido_08';
+%     fname = fullfile(filepath);
+%     theta_n = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_quad_distorcido_08_1WaterContent_steptime3.txt'));
+%
+%     % theta_n --> T=0 e 8
+%     theta_aux=theta_n(:,end);
+%     theta_80=theta_aux(centro_80);
+%
+%     plot(theta_80, centroY_80)
+%     hold on
+%     % TPFA
+%     % theta_n --> 8
+%     filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_TPFA_quad_distorcido_08';
+%     fname = fullfile(filepath);
+%     theta_n = readmatrix(fullfile(fname, 'Tables_teste_TPFA_quad_distorcido_08_1WaterContent_steptime3.txt'));
+%     theta_aux=theta_n(:,end);
+%     theta_80=theta_aux(centro_80);
+%     plot(theta_80, centroY_80)
+%     hold on
+%
+%     % theta experimental x=80. t=0
+%     T3=[0.313699	200-121.724
+%         0.324658	200-110.690
+%         0.121918	200-100.345
+%         0.153425	200-91.3793
+%         0.0684932	200-81.3793
+%         0.0602740	200-71.3793
+%         0.0821918	200-61.3793
+%         0.0917808	200-50.6897
+%         0.0397260	200-41.0345
+%         0.0383562	200-31.0345
+%         0.0260274	200-21.7241
+%         0.00273973	200-11.3793];
+%
+%     plot(T3(:,1), T3(:,2),'o')
+%     hold on
+%
+%     % theta experimental x=80. t=8
+%     T4=[0.319178	200-100.345
+%         0.321918	200-91.0345
+%         0.280822	200-81.0345
+%         0.184932	200-71.7241
+%         0.212329	200-60.6897
+%         0.215068	200-51.3793
+%         0.163014	200-41.3793
+%         0.157534	200-31.3793
+%         0.135616	200-21.0345
+%         0.135616	200-11.3793
+%         0.116438	200-3.10345];
+%     plot(T4(:,1), T4(:,2),'o')
+%     xlabel('Water Content')
+%     ylabel('Z')
+%     title('x=80')
+%     grid
+%
+%     %% ============================================================
+%     figure(5)
+%
+%     cacheFile = fullfile(fileparts(fileparts(mfilename('fullpath'))), 'data', 'centro_x=140_quad.mat');
+%     if isfile(cacheFile), centro_140 = load(cacheFile).centro_140;
+%     else
+%      centro_140 = obj.elementos_centroide_na_caixa(elem, coord, [-Inf 200], [140 145]);
+%      save(cacheFile, 'centro_140');
+%     end
+%     centroY_140=centelem(centro_140,2);
+%
+%     % MPFAD
+%     filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_MPFAD_quad_08';
+%     fname = fullfile(filepath);
+%     theta_n = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_quad_08_1WaterContent_steptime3.txt'));
+%
+%     theta_aux=theta_n(:,end);
+%     theta_140=theta_aux(centro_140);
+%     theta_init=theta_n(:,2);
+%
+%     plot(theta_140, centroY_140)
+%     hold on
+%     plot(theta_init(centro_140),centroY_140)
+%     hold on
+%     % malha quadrilateral distorcido
+%     % MPFAD
+%     filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_MPFAD_quad_distorcido_08';
+%     fname = fullfile(filepath);
+%     theta_n = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_quad_distorcido_08_1WaterContent_steptime3'));
+%     theta_aux=theta_n(:,end);
+%     theta_140=theta_aux(centro_140);
+%     centroY_140=centelem(centro_140,2);
+%     plot(theta_140, centroY_140)
+%     hold on
+%     % TPFA
+%     filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_TPFA_quad_distorcido_08';
+%     fname = fullfile(filepath);
+%     theta_n = readmatrix(fullfile(fname, 'Tables_teste_TPFA_quad_distorcido_08_1WaterContent_steptime3.txt'));
+%     theta_aux=theta_n(:,end);
+%     theta_140=theta_aux(centro_140);
+%     centroY_140=centelem(centro_140,2);
+%     plot(theta_140, centroY_140)
+%     hold on
+%
+%     % Theta experimental x=140. t=0
+%     T3=[0.271622	200-121.379
+%         0.239189	200-111.379
+%         0.187838	200-101.034
+%         0.101351	200-91.3793
+%         0.0729730	200-80.3448
+%         0.0581081	200-71.3793
+%         0.0567568	200-60.3448
+%         0.0432432	200-51.0345
+%         0.0391892	200-41.0345
+%         0.0162162	200-21.7241
+%         0.0148649	200-10.6897 ];
+%
+%     plot(T3(:,1), T3(:,2),'o')
+%     hold on
+%     % theta experimental x=140. t=8
+%     T4=[0.278378	200-112.069
+%         0.314865	200-101.379
+%         0.275676	200-91.0345
+%         0.259459	200-81.0345
+%         0.228378	200-71.3793
+%         0.117568	200-60.3448
+%         0.0743243	200-51.0345
+%         0.0527027	200-41.3793
+%         0.0432432	200-31.7241
+%         0.0135135	200-21.7241];
+%     plot(T4(:,1), T4(:,2),'o')
+%
+%     title('x=140')
+%     grid
+%
+%     %% =============================================================
+%
+%     filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_MPFAD_quad_08';
+%     fname = fullfile(filepath);
+%     h_n = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_quad_08_1h_steptime3.txt'));
+%     time2= readmatrix(fullfile(fname, 'Tables_teste_MPFAD_quad_08_1time_step3.txt'));
+%     h_n(:, 1:2:end) = [];
+%
+%    cacheFile = fullfile(fileparts(fileparts(mfilename('fullpath'))), 'data', 'centros_6pontos_quadrilateral.mat');
+%
+%     if isfile(cacheFile)
+%         S = load(cacheFile);
+%         centro1 = S.centro1; centro2 = S.centro2; centro3 = S.centro3;
+%         centro4 = S.centro4; centro5 = S.centro5; centro6 = S.centro6;
+%     else
+%         centro1 = obj.elemento_no_ponto(elem, coord, 12.5, 107.5);
+%         centro2 = obj.elemento_no_ponto(elem, coord, 12.5, 132.5);
+%         centro3 = obj.elemento_no_ponto(elem, coord, 12.5, 187.5);
+%         centro4 = obj.elemento_no_ponto(elem, coord, 162.5, 82.5);
+%         centro5 = obj.elemento_no_ponto(elem, coord, 162.5, 117.5);
+%         centro6 = obj.elemento_no_ponto(elem, coord, 162.5, 157.5);
+%         save(cacheFile, 'centro1', 'centro2', 'centro3', 'centro4', 'centro5', 'centro6');
+%     end
+%
+%     h_time1 = h_n(centro1,:);
+%     h_time2 = h_n(centro2,:);
+%     h_time3 = h_n(centro3,:);
+%     h_time4 = h_n(centro4,:);
+%     h_time5 = h_n(centro5,:);
+%     h_time6 = h_n(centro6,:);
+%    %===========================================================
+%    % malha quadrilateral distorcido
+%    % MPFA-D
+%    filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_MPFAD_quad_distorcido_08';
+%     fname = fullfile(filepath);
+%     h_n = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_quad_distorcido_08_1h_steptime3.txt'));
+%     h_n_MPFAD=h_n;
+%     h_n_MPFAD(:, 1:2:end) = [];
+%      h_time1_M=h_n_MPFAD(centro1,:);
+%      h_time2_M=h_n_MPFAD(centro2,:);
+%      h_time3_M=h_n_MPFAD(centro3,:);
+%      h_time4_M=h_n_MPFAD(centro4,:);
+%      h_time5_M=h_n_MPFAD(centro5,:);
+%      h_time6_M=h_n_MPFAD(centro6,:);
+%     % TPFA
+%      filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_TPFA_quad_distorcido_08';
+%     fname = fullfile(filepath);
+%     h_n = readmatrix(fullfile(fname, 'Tables_teste_TPFA_quad_distorcido_08_1h_steptime3.txt'));
+%     h_n_TPFA=h_n;
+%     h_n_TPFA(:, 1:2:end) = [];
+%     h_time1_T=h_n_TPFA(centro1,:);
+%     h_time2_T=h_n_TPFA(centro2,:);
+%     h_time3_T=h_n_TPFA(centro3,:);
+%     h_time4_T=h_n_TPFA(centro4,:);
+%     h_time5_T=h_n_TPFA(centro5,:);
+%     h_time6_T=h_n_TPFA(centro6,:);
+%     figure(6)
+%     plot(time2,h_time1)
+%     plot(time2,h_time1_M)
+%     plot(time2,h_time1_T)
+%     hold on
+%     plot(time2,h_time2)
+%     plot(time2,h_time2_M)
+%     plot(time2,h_time2_T)
+%     hold on
+%     plot(time2,h_time3)
+%     plot(time2,h_time3_M)
+%     plot(time2,h_time3_T)
+%     xlabel('Time')
+%     ylabel('Water content ')
+%     title('x=11')
+%     grid
+%
+%     figure(7)
+%     plot(time2,h_time4)
+%     plot(time2,h_time4_M)
+%     plot(time2,h_time4_T)
+%     hold on
+%     plot(time2,h_time5)
+%     plot(time2,h_time5_M)
+%     plot(time2,h_time5_T)
+%     hold on
+%     plot(time2,h_time6)
+%     plot(time2,h_time6_M)
+%     plot(time2,h_time6_T)
+%
+%     xlabel('Time')
+%     ylabel('Water Pressure ')
+%     title('x=161')
+%     grid
+%
+%     %% ============================================================
+% else
+%     figure(3)
+%     % Malha triangular
+%     % x=20
+%     cacheFile = fullfile(fileparts(fileparts(mfilename('fullpath'))), 'data', 'centro_x=20_tri.mat');
+%     if isfile(cacheFile), centro = load(cacheFile).centro;
+%     else
+%      centro = obj.elementos_centroide_na_caixa(elem, coord, [-Inf 200], [20 25]);
+%      save(cacheFile, 'centro');
+%     end
+%
+%     filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_MPFAD_tri_08';
+%     fname = fullfile(filepath);
+%     theta_n = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_tri_08_1WaterContent_steptime3.txt'));
+%     centelem_aux = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_tri_08_1centrocell3.txt'));
+%     centroY=centelem_aux(centro,2);
+%
+%     % MPFA-D
+%     theta_aux=theta_n(:,end);
+%     theta_init=theta_n(:,2);
+%     theta=theta_aux(centro);
+%     % theta_n --> T=0
+%     plot(theta_init(centro),centroY)
+%     hold on
+%     % theta_n --> T=8
+%     plot(theta, centroY)
+%     hold on
+%
+%     % TPFA
+%     filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_TPFA_tri_08';
+%     fname = fullfile(filepath);
+%     theta_n_T = readmatrix(fullfile(fname, 'Tables_teste_TPFA_tri_08_1WaterContent_steptime3.txt'));
+%     % theta_n --> T=8
+%     theta_aux_T=theta_n_T(:,end);
+%     theta_T=theta_aux_T(centro);
+%     plot(theta_T, centroY)
+%     hold on
+%     % Malha triangular distorcido
+%     % MPFA D
+%     filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_MPFAD_tri_distorcido_08';
+%     fname = fullfile(filepath);
+%     theta_n_M = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_tri_distorcido_08_1WaterContent_steptime3.txt'));
+%     % theta_n --> T=8
+%     theta_aux_M=theta_n_M(:,end);
+%     theta_M=theta_aux_M(centro);
+%
+%     plot(theta_M, centroY)
+%     hold on
+%     % TPFA
+%     % theta_n --> T=8
+%     filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_TPFA_tri_distorcido_08';
+%     fname = fullfile(filepath);
+%     theta_n_TP = readmatrix(fullfile(fname, 'Tables_teste_TPFA_tri_distorcido_08_1WaterContent_steptime3.txt'));
+%     theta_aux=theta_n_TP(:,end);
+%     theta_TP=theta_aux(centro);
+%
+%     plot(theta_TP, centroY)
+%     legend('Initially solution','MPFA-D: triangle','TPFA: triangle','MPFA-D: distorted triangle','TPFA: distorted triangle')
+%
+%     hold on
+%
+%     % theta experimental TEMPO=0
+%     T1=[0.309198	200-130.634
+%         0.304946	200-121.653
+%         0.319766	200-111.612
+%         0.143656	200-100.410
+%         0.142113	200-90.3880
+%         0.0642259	200-81.4914
+%         0.0558460	200-70.4409
+%         0.0406789	200-61.1264
+%         0.0473110	200-50.7499
+%         0.0307680	200-40.7457
+%         0.0156071	200-31.7768
+%         0.00315489	200-21.7679
+%         0.00980558	200-12.4283
+%         ];
+%     plot(T1(:,1), T1(:,2),'o')
+%     hold on
+%
+%     % theta experimental TEMPO= 8
+%     T2=[0.319091	200-100.900
+%         0.301364	200-90.9002
+%         0.283636	200-80.8976
+%         0.271364	200-70.8871
+%         0.271364	200-60.8625
+%         0.253636	200-50.8693
+%         0.249545	200-40.1613
+%         0.250909	200-31.5192
+%         0.250909	200-21.4883
+%         0.253636	200-12.1518];
+%
+%     plot(T2(:,1), T2(:,2),'o')
+%     xlabel('Water Content')
+%     ylabel('Z')
+%     title('x=21')
+%     grid
+%     %% ============================================================
+%     figure(4)
+%     % x=80
+%
+%     cacheFile = fullfile(fileparts(fileparts(mfilename('fullpath'))), 'data', 'centro_x=80_tri.mat');
+%     if isfile(cacheFile), centro_80 = load(cacheFile).centro_80;
+%     else
+%      centro_80 = obj.elementos_centroide_na_caixa(elem, coord, [-Inf 200], [80 85]);
+%      save(cacheFile, 'centro_80');
+%     end
+%
+%
+%     filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_MPFAD_tri_08';
+%     fname = fullfile(filepath);
+%     theta_n = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_tri_08_1WaterContent_steptime3.txt'));
+%     centelem = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_tri_08_1centrocell3.txt'));
+%     centroY_80=centelem(centro_80,2);
+%     % MPFA-D
+%     % theta_n --> T=0 e 8
+%     theta_aux=theta_n(:,end);
+%     theta_init=theta_n(:,2);
+%     theta_80=theta_aux(centro_80);
+%     plot(theta_80, centroY_80)
+%
+%     hold on
+%     plot(theta_init(centro_80),centroY_80)
+%
+%     hold on
+%     % TPFA
+%
+%     filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_TPFA_tri_08';
+%     fname = fullfile(filepath);
+%     theta_n = readmatrix(fullfile(fname, 'Tables_teste_TPFA_tri_08_1WaterContent_steptime3.txt'));
+%     % MPFA-D
+%     % theta_n --> T=0 e 8
+%     theta_aux=theta_n(:,end);
+%     theta_80=theta_aux(centro_80);
+%     plot(theta_80, centroY_80)
+%
+%     hold on
+%
+%     % malha triangular distorcido
+%     % MPFAD
+%     filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_MPFAD_tri_distorcido_08';
+%     fname = fullfile(filepath);
+%     theta_n = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_tri_distorcido_08_1WaterContent_steptime3.txt'));
+%
+%     % theta_n --> T=0 e 8
+%     theta_aux=theta_n(:,end);
+%     theta_80=theta_aux(centro_80);
+%     plot(theta_80, centroY_80)
+%
+%     hold on
+%     % TPFA
+%     % theta_n --> 8
+%     filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_TPFA_tri_distorcido_08';
+%     fname = fullfile(filepath);
+%     theta_n = readmatrix(fullfile(fname, 'Tables_teste_TPFA_tri_distorcido_08_1WaterContent_steptime3.txt'));
+%     theta_aux=theta_n(:,end);
+%     theta_80=theta_aux(centro_80);
+%     plot(theta_80, centroY_80)
+%     legend('MPFA-D: triangle','Initially solution','TPFA: triangle','MPFA-D: distorted triangle','TPFA: distorted triangle')
+%     hold on
+%
+%     % theta experimental x=80. t=0
+%     T3=[0.313699	200-121.724
+%         0.324658	200-110.690
+%         0.121918	200-100.345
+%         0.153425	200-91.3793
+%         0.0684932	200-81.3793
+%         0.0602740	200-71.3793
+%         0.0821918	200-61.3793
+%         0.0917808	200-50.6897
+%         0.0397260	200-41.0345
+%         0.0383562	200-31.0345
+%         0.0260274	200-21.7241
+%         0.00273973	200-11.3793];
+%
+%     plot(T3(:,1), T3(:,2),'o')
+%     hold on
+%
+%     % theta experimental x=80. t=8
+%     T4=[0.319178	200-100.345
+%         0.321918	200-91.0345
+%         0.280822	200-81.0345
+%         0.184932	200-71.7241
+%         0.212329	200-60.6897
+%         0.215068	200-51.3793
+%         0.163014	200-41.3793
+%         0.157534	200-31.3793
+%         0.135616	200-21.0345
+%         0.135616	200-11.3793
+%         0.116438	200-3.10345];
+%     plot(T4(:,1), T4(:,2),'o')
+%     legend('MPFA-D: tri', 'TPFA:tri','MPFA-D: distorted tri', 'TPFA: distorted tri')
+%     xlabel('Water Content')
+%     ylabel('Z')
+%     title('x=80')
+%     grid
+%     %% ============================================================
+%     % X=140
+%     figure(5)
+%
+%     cacheFile = fullfile(fileparts(fileparts(mfilename('fullpath'))), 'data', 'centro_x=140_tri.mat');
+%     if isfile(cacheFile), centro_140 = load(cacheFile).centro_140;
+%     else
+%      centro_140 = obj.elementos_centroide_na_caixa(elem, coord, [-Inf 200], [140 145]);
+%      save(cacheFile, 'centro_140');
+%     end
+%
+%     % malha triangular
+%     % MPFAD
+%     filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_MPFAD_tri_08';
+%     fname = fullfile(filepath);
+%     theta_n = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_tri_08_1WaterContent_steptime3.txt'));
+%     centelem = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_tri_08_1centrocell3.txt'));
+%     centroY_140=centelem(centro_140,2);
+%
+%     theta_aux=theta_n(:,end);
+%     theta_140=theta_aux(centro_140);
+%     theta_init=theta_n(:,2);
+%     plot(theta_140, centroY_140)
+%     hold on
+%     plot(theta_init(centro_140),centroY_140)
+%     hold on
+%     % TPFA
+%     filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_TPFA_tri_08';
+%     fname = fullfile(filepath);
+%     theta_n = readmatrix(fullfile(fname, 'Tables_teste_TPFA_tri_08_1WaterContent_steptime3.txt'));
+%     theta_aux=theta_n(:,end);
+%     theta_140=theta_aux(centro_140);
+%     plot(theta_140, centroY_140)
+%     hold on
+%     % malha triangular distorcido
+%     % MPFAD
+%     filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_MPFAD_tri_distorcido_08';
+%     fname = fullfile(filepath);
+%     theta_n = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_tri_distorcido_08_1WaterContent_steptime3'));
+%     theta_aux=theta_n(:,end);
+%     theta_140=theta_aux(centro_140);
+%     plot(theta_140, centroY_140)
+%     hold on
+%     % TPFA
+%     filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_TPFA_tri_distorcido_08';
+%     fname = fullfile(filepath);
+%     theta_n = readmatrix(fullfile(fname, 'Tables_teste_TPFA_tri_distorcido_08_1WaterContent_steptime3.txt'));
+%     theta_aux=theta_n(:,end);
+%     theta_140=theta_aux(centro_140);
+%     plot(theta_140, centroY_140)
+%     hold on
+%
+%     % Theta experimental x=140. t=0
+%     T3=[0.271622	200-121.379
+%         0.239189	200-111.379
+%         0.187838	200-101.034
+%         0.101351	200-91.3793
+%         0.0729730	200-80.3448
+%         0.0581081	200-71.3793
+%         0.0567568	200-60.3448
+%         0.0432432	200-51.0345
+%         0.0391892	200-41.0345
+%         0.0162162	200-21.7241
+%         0.0148649	200-10.6897 ];
+%
+%     plot(T3(:,1), T3(:,2),'o')
+%     hold on
+%     % theta experimental x=140. t=8
+%     T4=[0.278378	200-112.069
+%         0.314865	200-101.379
+%         0.275676	200-91.0345
+%         0.259459	200-81.0345
+%         0.228378	200-71.3793
+%         0.117568	200-60.3448
+%         0.0743243	200-51.0345
+%         0.0527027	200-41.3793
+%         0.0432432	200-31.7241
+%         0.0135135	200-21.7241];
+%     plot(T4(:,1), T4(:,2),'o')
+%     xlabel(' Water content')
+%     ylabel('Z')
+%     title('x=140')
+%     legend('MPFA-D: tri', 'TPFA:tri','MPFA-D: distorted tri', 'TPFA: distorted tri')
+%
+%     grid
+%     %%=============================================================
+%     %% =============================================================
+%     % malha triangular
+%     % MPFAD
+%     filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_MPFAD_tri_08';
+%     fname = fullfile(filepath);
+%     h_n = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_tri_08_1h_steptime3.txt'));
+%     time2= readmatrix(fullfile(fname, 'Tables_teste_MPFAD_tri_08_1time_step3.txt'));
+%     h_n_M=h_n;
+%     h_n_M(:, 1:2:end) = [];
+%     % TPFA
+%     filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_TPFA_tri_08';
+%     fname = fullfile(filepath);
+%     h_n = readmatrix(fullfile(fname, 'Tables_teste_TPFA_tri_08_1h_steptime3.txt'));
+%     h_n_T=h_n;
+%     h_n_T(:, 1:2:end) = [];
+%
+%     cacheFile = fullfile(fileparts(fileparts(mfilename('fullpath'))), 'data', 'centros_6pontos_tri.mat');
+%
+%     if isfile(cacheFile)
+%         S = load(cacheFile);
+%         centro1 = S.centro1; centro2 = S.centro2; centro3 = S.centro3;
+%         centro4 = S.centro4; centro5 = S.centro5; centro6 = S.centro6;
+%     else
+%         centro1 = obj.elemento_no_ponto(elem, coord, 12.5, 107.5);
+%         centro2 = obj.elemento_no_ponto(elem, coord, 12.5, 132.5);
+%         centro3 = obj.elemento_no_ponto(elem, coord, 12.5, 187.5);
+%         centro4 = obj.elemento_no_ponto(elem, coord, 162.5, 82.5);
+%         centro5 = obj.elemento_no_ponto(elem, coord, 162.5, 117.5);
+%         centro6 = obj.elemento_no_ponto(elem, coord, 162.5, 157.5);
+%         save(cacheFile, 'centro1', 'centro2', 'centro3', 'centro4', 'centro5', 'centro6');
+%     end
+%
+%     h_time1_M = h_n_M(centro1,:);  h_time1_T = h_n_T(centro1,:);
+%     h_time2_M = h_n_M(centro2,:);  h_time2_T = h_n_T(centro2,:);
+%     h_time3_M = h_n_M(centro3,:);  h_time3_T = h_n_T(centro3,:);
+%     h_time4_M = h_n_M(centro4,:);  h_time4_T = h_n_T(centro4,:);
+%     h_time5_M = h_n_M(centro5,:);  h_time5_T = h_n_T(centro5,:);
+%     h_time6_M = h_n_M(centro6,:);  h_time6_T = h_n_T(centro6,:);
+%    %===========================================================
+%    % malha triangular distorcido
+%    % MPFA-D
+%    filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_MPFAD_tri_distorcido_08';
+%     fname = fullfile(filepath);
+%     h_n = readmatrix(fullfile(fname, 'Tables_teste_MPFAD_tri_distorcido_08_1h_steptime3.txt'));
+%     h_n_MPFAD=h_n;
+%     h_n_MPFAD(:, 1:2:end) = [];
+%      h_time1_MTD=h_n_MPFAD(centro1,:);
+%      h_time2_MTD=h_n_MPFAD(centro2,:);
+%      h_time3_MTD=h_n_MPFAD(centro3,:);
+%      h_time4_MTD=h_n_MPFAD(centro4,:);
+%      h_time5_MTD=h_n_MPFAD(centro5,:);
+%      h_time6_MTD=h_n_MPFAD(centro6,:);
+%     % TPFA
+%      filepath='C:\Users\flc59\Documents\Benchmark_Cases\BenchHydraulic409\teste_TPFA_tri_distorcido_08';
+%     fname = fullfile(filepath);
+%     h_n = readmatrix(fullfile(fname, 'Tables_teste_TPFA_tri_distorcido_08_1h_steptime3.txt'));
+%     h_n_TPFA=h_n;
+%     h_n_TPFA(:, 1:2:end) = [];
+%     h_time1_TTD=h_n_TPFA(centro1,:);
+%     h_time2_TTD=h_n_TPFA(centro2,:);
+%     h_time3_TTD=h_n_TPFA(centro3,:);
+%     h_time4_TTD=h_n_TPFA(centro4,:);
+%     h_time5_TTD=h_n_TPFA(centro5,:);
+%     h_time6_TTD=h_n_TPFA(centro6,:);
+%     figure(6)
+%     plot(time2,h_time1_M)
+%      plot(time2,h_time1_T)
+%     plot(time2,h_time1_MTD)
+%     plot(time2,h_time1_TTD)
+%     hold on
+%     plot(time2,h_time2_M)
+%     plot(time2,h_time2_T)
+%     plot(time2,h_time2_MTD)
+%     plot(time2,h_time2_TTD)
+%     hold on
+%     plot(time2,h_time3_M)
+%     plot(time2,h_time3_T)
+%     plot(time2,h_time3_MTD)
+%     plot(time2,h_time3_TTD)
+%
+%     legend('MPFA-D: tri', 'TPFA:tri','MPFA-D: distorted tri', 'TPFA: distorted tri')
+%
+%     xlabel('Time')
+%     ylabel('Water content ')
+%     title('x=11')
+%     grid
+%
+%     figure(7)
+%     plot(time2,h_time4_M)
+%     plot(time2,h_time4_T)
+%     plot(time2,h_time4_MTD)
+%     plot(time2,h_time4_TTD)
+%     hold on
+%     plot(time2,h_time5_M)
+%     plot(time2,h_time5_T)
+%     plot(time2,h_time5_MTD)
+%     plot(time2,h_time5_TTD)
+%     hold on
+%     plot(time2,h_time6_M)
+%     plot(time2,h_time6_T)
+%     plot(time2,h_time6_MTD)
+%     plot(time2,h_time6_TTD)
+%
+%     xlabel('Time')
+%     ylabel('Water Pressure ')
+%     title('x=161')
+%     grid
+% end
 
         end
 
         % ── 16. Escrita de resultados em arquivo ──────────────────
         % Salva os campos h, theta, kmap e os centroides em .txt
         % para pos-processamento externo (ex: Python, MATLAB scripts)
-        function escreverResultados(obj, env, h_storage, theta_storage, ...
-                kmap_storage, time_storage)
-            centelem  = env.geometry.centelem;
+        function escreverResultados(obj, env, options)
+
+            arguments
+                obj
+                env
+                options.h_storage     = []
+                options.theta_storage = []
+                options.kmap_storage  = []
+                options.time_storage  = []
+                options.extras        = struct()
+            end
             filepath  = env.mainpathfolders.path;
             tabfolder = env.mainpathfolders.tabfolder;
             fname = fullfile(filepath, tabfolder);
+            h_storage=options.h_storage;
+            theta_storage=options.theta_storage;
+            kmap_storage=options.kmap_storage;
+            time_storage=options.time_storage;
+            centelem=env.geometry.centelem;
 
             writematrix(h_storage,     [fname 'h_steptime3.txt']);
             writematrix(theta_storage, [fname 'WaterContent_steptime3.txt']);

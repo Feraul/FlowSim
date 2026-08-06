@@ -73,8 +73,8 @@ if any(neumask)
     bcvals = zeros(bedgesize,1);
     [~,loc]=ismember(bedge(neumask,5),bcflag(:,1));
     bcvals(neumask)=bcflag(loc,2);
-    mask222=bedge(:,5)>200;
-    flowrate_b(neumask) = -nor(neumask).*bcvals(neumask)+flowrateZ(find(mask222==1),1);
+   
+    flowrate_b(neumask) = -nor(neumask).*bcvals(neumask)-flowrateZ(neumask,1);
 end
 
 flowrate(1:bedgesize)=flowrate_b;
@@ -105,7 +105,7 @@ end
 flowrate(bedgesize+1:end,1) = visonface_i .* Kde .* (p(rel)-p(lef)-Ded.*(p2-p1));
 
 if numcase==435 || numcase==431 || numcase==437 || numcase==439
-    flowrate = flowrate - flowrateZ;
+    flowrate = flowrate + flowrateZ;
 end
 
 %% ==================================================

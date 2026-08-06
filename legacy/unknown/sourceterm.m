@@ -1,11 +1,10 @@
-function [mvector]=sourceterm(mvector,source_wells)
-
-   if isempty(source_wells) || (isstruct(source_wells) && ...
-            (~isfield(source_wells,'source') || isempty(source_wells.source)))
-        return;
+function [mvector] = sourceterm(mvector, source_wells)
+    if isstruct(source_wells) && isfield(source_wells,'source') &&...
+            ~isempty(source_wells.source)
+        source = source_wells.source;
+    else
+        % Caso439/Vauclin (ou qualquer caso sem fonte): source_wells = false, [], ou struct sem 'source'
+        source = zeros(size(mvector));
     end
-    source=source_wells.source;
-    %The vector "mvector" is added to vector returned from function below.
     mvector = mvector + source;
-
-end 
+end

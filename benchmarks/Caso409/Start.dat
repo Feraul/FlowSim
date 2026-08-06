@@ -107,7 +107,7 @@ mpfad
 lpew2
 
 // Se esquema nao-linear: tolerancia e numero maximo de iteracoes.
-1e-6
+1e-9
 3000
 
 // Acelerador da iteracao de Picard:
